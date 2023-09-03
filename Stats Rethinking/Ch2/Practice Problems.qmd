@@ -1,0 +1,42 @@
+---
+title: "Practice Problems"
+format: html
+---
+
+```{r}
+library(tidyverse)
+```
+
+# 2M1.
+
+```{r}
+library()
+```
+
+```{r}
+N <- 21
+grid <- seq(0,1,length.out=N)
+prior <- rep(1, N)
+likelihood = grid**3
+
+posterior.raw <- likelihood * prior
+posterior <- posterior.raw/sum(posterior.raw)
+```
+
+```{r}
+ggplot()+
+  geom_line(aes(x=grid, y=posterior))
+```
+
+```{r}
+N <- 1001
+grid <- seq(0,1,length.out=N)
+prior <- rep(1, N)
+likelihood = grid**3
+
+posterior.raw <- likelihood * prior
+posterior <- posterior.raw/sum(posterior.raw)
+
+ggplot()+
+  geom_line(aes(x=grid, y=posterior))
+```
