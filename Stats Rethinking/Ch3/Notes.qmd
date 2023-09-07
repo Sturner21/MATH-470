@@ -1,0 +1,48 @@
+---
+title: "Notes"
+format: html
+---
+
+# Libraries
+
+```{r}
+library(rethinking)
+```
+
+# 3.1 - Sampling from a grid-approximate posterior
+
+```{r}
+#Add the prior dist which we set to a uniform dist
+p_grid <- seq(from=0, to=1, length.out=1000)
+prob_p <- rep(1,1000)
+
+#Add the "data" probability
+prob_data <- dbinom(6, size=9, prob=p_grid)
+
+#Multiply the two to get the posterior dist
+posterior <- prob_data * prob_p
+posterior <- posterior / sum(posterior)
+```
+
+```{r}
+#Grab (or sample) values from our posterior and graph them below
+#1e4 = 10,000
+samples <- sample(p_grid, prob=posterior, size = 1e4, replace = TRUE)
+```
+
+```{r}
+plot(samples)
+```
+
+```{r}
+dens(samples)
+```
+
+# 3.2 - Sampling to Summarize
+
+We can use bounds to find information about our parameters
+
+```{r}
+#What is the probability that the proporiotn of water is less than 0.5?
+sum(posterior[p_grid < 0.5])
+```

@@ -5,13 +5,10 @@ format: html
 
 ```{r}
 library(tidyverse)
+library(rethinking)
 ```
 
 # 2M1.
-
-```{r}
-library()
-```
 
 ```{r}
 N <- 21
