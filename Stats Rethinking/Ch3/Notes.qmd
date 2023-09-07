@@ -46,3 +46,11 @@ We can use bounds to find information about our parameters
 #What is the probability that the proporiotn of water is less than 0.5?
 sum(posterior[p_grid < 0.5])
 ```
+
+One such bound is the *compadability interval* (not to be confused with a confidence interval) which is an interval of posterior probability.
+
+However, there are infinite intervals from which to choose any density (given density \< 1). Therefore, we should use the *Highest Point Density Interval* (HPDI) which, for a given probability mass, will give us the range with the most (dense) observations.
+
+Still don't understand what a loss function is.
+
+# 3.3 - Sampling to simulate prediction
