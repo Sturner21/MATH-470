@@ -1,0 +1,356 @@
+---
+title: "Practice Problems"
+format: html
+---
+
+# Load Libraries
+
+```{r}
+library(rethinking)
+library(tidyverse)
+```
+
+# Work with Dr.Parson
+
+```{r}
+N <- 1001
+grid <- seq(0,1,length.out=N)
+prior <- rep(1, N)
+prior <- prior / N
+```
+
+```{r}
+sams <- sample(grid, prob=prior, size=1e4, replace=TRUE)
+```
+
+```{r}
+ggplot()+
+  geom_density(aes(x=sams))
+```
+
+```{r}
+dist <- rbinom(1e4, 15, sams)
+```
+
+```{r}
+ggplot()+
+  geom_histogram(aes(x=dist), bins=100)
+```
+
+```{r}
+likelihood <- dbinom(8, 15, grid)
+```
+
+```{r}
+posterior.raw <- likelihood*prior
+posterior <- posterior.raw / sum(posterior.raw)
+```
+
+```{r}
+sams2 <- sample(grid, prob=posterior, size=1e4, replace=TRUE)
+```
+
+```{r}
+ggplot()+
+  geom_density(aes(x=sams2))+
+  geom_vline(aes(xintercept=8/15, color="red"))
+```
+
+```{r}
+dist2 <- rbinom(1e4, 15, sams2)
+```
+
+```{r}
+ggplot()+
+  geom_histogram(aes(x=dist2), bins=100)
+```
+
+```{r}
+dist3 <- rbinom(1e4, 15, prob=8/15)
+```
+
+```{r}
+ggplot()+
+  geom_histogram(aes(x=dist3), bins=100)
+```
+
+# 3E1
+
+## Set up
+
+```{r}
+p_grid <- seq(from=0, to=1, length.out=1000)
+prior <- rep(1,1000)
+likelihood <- dbinom(6,size = 9, prob = p_grid)
+posterior <- likelihood*prior
+posterior <- posterior / sum(posterior)
+set.seed(100)
+samples <- sample(p_grid, prob=posterior, size=1e4, replace=TRUE)
+```
+
+How much posterior probability lies below p=0.2?
+
+```{r}
+sum(posterior[p_grid<.2])
+```
+
+# 3E2
+
+How much of the posterior probability lies above p=0.8?
+
+```{r}
+sum(posterior[p_grid>.8])
+```
+
+# 3E3
+
+How much of the posterior probability lies between p=0.2 and p=0.8?
+
+```{r}
+sum(posterior[p_grid<.8 & p_grid>.2])
+```
+
+# 3E4
+
+20% of the posterior lies below which value of p?
+
+```{r}
+quantile(samples, .2)
+```
+
+# 3E5
+
+20% of the posterior lies above which value of p?
+
+```{r}
+quantile(samples, .8)
+```
+
+# 3E6
+
+Which values of p contain the narrowest interval equal to 66% to the posterior probability?
+
+```{r}
+HPDI(samples, prob=0.66)
+```
+
+# 3E7
+
+Which vlaues of p contains 66% of the posterior probability, assuming equal posterior probability both below and above the interval?
+
+```{r}
+quantile(samples, c(.166666,.833333))
+```
+
+# 3M1
+
+Suppose the globe tossing data had turned out to be 8 water in 15 tosses. Construct the posterior distribution, using grid approximation. Use the same flat prior as before.
+
+```{r}
+#Did this with in the "Work with Dr.Parson" section above
+likelihood2 <- dbinom(8, 15, prob = p_grid)
+
+posterior2 <- likelihood2*prior
+posterior2 <- posterior2/sum(posterior2)
+```
+
+# 3M2
+
+Draw 10,000 samples form the grid approximation from above. Then use the samples to calculate the 90% HPDI for p.
+
+```{r}
+samples2 <- sample(p_grid, prob=posterior2, size=1e4, replace=T)
+HPDI(samples2, prob=0.9)
+```
+
+# 3M3
+
+Construct a posterior predictive check for this model and data. This means simulate the distribution of samples, averaging over the posterior uncertainty in p. What is the probability of observing 8 water in 15 tosses?
+
+```{r}
+sim <- rbinom(1e4, 15, prob=samples2)
+
+sum(sim == 8) / length(sim)
+```
+
+```{r}
+ggplot()+
+  geom_histogram(aes(x=sim), bins=100)
+```
+
+The problem didn't call for a histogram but this should be a good check. Looking at the value for 8, it's about 1,400 which tells us that the probability should be about 14% since we have 10,000 samples. Which is what the above chunk is telling us so this should be right.
+
+# 3M4
+
+Using the posterior distribution constructed fromt the new (8/15) data, now calculate the probability of observing 6 waters in 9 tosses.
+
+```{r}
+sim <- rbinom(1e4, 9, prob=samples2)
+
+sum(sim == 6) / length(sim)
+```
+
+```{r}
+ggplot()+
+  geom_histogram(aes(x=sim), bins=100)
+```
+
+This tells us that the probability of seeing 6 water in 9 tosses is about 17% given our posterior sample which has p of 8/15.
+
+# 3M5
+
+Start over at 3M1, but now use a prior that is zero below p=0.5 and a constant above p=0.5. This corresponds to prior information that a majority of Earth's surface is water. Repeat each problem above and compare the inferences. What differences does the better prior make? If it helps, compare inferences (using both priors) to the true value p=0.7.
+
+```{r}
+#3M1
+prior2 <- c(rep(0,500), rep(1, 500))
+
+posterior3 <- likelihood2*prior2
+posterior3 <- posterior3/sum(posterior3)
+```
+
+```{r}
+#3M2
+samples3 <- sample(p_grid, prob=posterior3, size=1e4, replace=T)
+HPDI(samples3, prob=0.9)
+```
+
+```{r}
+#3M3
+sim <- rbinom(1e4, 15, prob=samples3)
+
+sum(sim == 8) / length(sim)
+
+ggplot()+
+  geom_histogram(aes(x=sim), bins=100)
+```
+
+```{r}
+#3M4
+sim <- rbinom(1e4, 9, prob=samples3)
+sum(sim == 6) / length(sim)
+
+ggplot()+
+  geom_histogram(aes(x=sim), bins=100)
+```
+
+This prior makes it more likely for us to observe the 6 waters in 9 tosses compared to the 8 waters in 15 tosses. Which doesn't make much sense and tells me that I've messed up somewhere. In face, shouldn't our prior with a 0 going all the way up to .5 make it so that we see very low values on the left half of the posteriors?
+
+# 3M6
+
+Suppose you want to estimate the Earth's proportion of water very precisely. Specifically, you want the 99% percentile interval of the posterior distribution of p to be only 0.05 wide. This means the distance between the upper and lower bound of the interval should be 0.05. How many times will you have to toss the globe to do this?
+
+```{r}
+#I think we should use the flat prior again for this
+#However, our likelihood function should change here, but we're going to use a likelihood which reflects the true p of Earth
+p_grid2 <- seq(from=0, to=1, length.out=1e4)
+
+likelihood3 <- dbinom(7,10,prob=p_grid2)
+
+posterior4 <- likelihood3*prior
+posterior4 <- posterior4/sum(posterior4)
+
+quantile(posterior4, c(.05, .995))
+```
+
+This is clearly wrong but I don't know where I'm messing up.
+
+# 3H1
+
+Using grid approximation, compute the posterior distribution for the probability of a birth being a boy. Assume a uniform prior probability. Which parameter value maximizes the posterior probability.
+
+```{r}
+#Set up for the problems
+data(homeworkch3)
+```
+
+```{r}
+b_grid <- seq(from=0, to=1, length.out=200)
+b_prior <- rep(1, 200)
+
+b_likelihood <- dbinom(111,200,prob=b_grid)
+
+b_posterior <- b_likelihood*b_prior
+b_posterior <- b_posterior/sum(b_posterior)
+```
+
+```{r}
+b_grid[which.max(b_posterior)]
+```
+
+Our parameter value of .55 maximizes this probability, which makes sense since in the 200 births we saw there were 111 boys, which was just over half. Furthermore, with a flat prior the data we observe (the likelihood function) is going to heavily influence our posterior.
+
+# 3H2
+
+Using the sample function, draw 10,000 random parameter values from the posterior distribution you calculated above. Use these samples to estimate the 50%, 89%, and 97% highest posterior density intervals.
+
+```{r}
+b_samples <- sample(b_grid, prob=b_posterior, size = 1e4, replace = TRUE)
+```
+
+```{r}
+HPDI(b_samples, prob=.5)
+HPDI(b_samples, prob=.89)
+HPDI(b_samples, prob=.97)
+```
+
+# 3H3
+
+Use rbinom to simulate 10,000 replicates of 200 births. You should end up with 10,000 numbers, each one a count of boys out of 200 births. Compare the distributions of predicted numbers of boys to the actual count in the data (111 out of 200 births). Does it look like the model fits the data well? That is, doees the distribution of predictions include the actual observation as a central, likely outcome?
+
+```{r}
+b_sim <- rbinom(1e4, 200, prob = b_samples)
+
+ggplot()+
+  geom_histogram(aes(x=b_sim), bins=100)+
+  geom_vline(xintercept = 111, color="red")
+```
+
+I would say this model does fit the data well if we only consider the central fit of it. That is, we see a peak of observations around 110 like the question was asking for.
+
+# 3H4
+
+Now compare 10,000 counts of boys from 100 simulated first borns only to the number of first births, birth1. How does the model look in this light?
+
+```{r}
+#Number of first born males
+sum(birth1)
+```
+
+```{r}
+b2_grid <- seq(from=0, to=1, length.out=100)
+b2_prior <- rep(1, 100)
+
+b2_likelihood <- dbinom(51,100,prob=b2_grid)
+
+b2_posterior <- b2_likelihood*b2_prior
+b2_posterior <- b2_posterior/sum(b2_posterior)
+
+b2_samples <- sample(b2_grid, prob=b2_posterior, size = 1e4, replace = TRUE)
+
+b2_sim <- rbinom(100, 100, prob = b2_samples)
+
+ggplot()+
+  geom_histogram(aes(x=b2_sim), bins=75)+
+  geom_vline(xintercept = 51, color="red")
+```
+
+# 3H5
+
+```{r}
+b3_grid <- seq(from=0, to=1, length.out=100)
+b3_prior <- rep(1, 100)
+
+b3_likelihood <- dbinom(49,100,prob=b3_grid)
+
+b3_posterior <- b3_likelihood*b3_prior
+b3_posterior <- b3_posterior/sum(b3_posterior)
+
+b3_samples <- sample(b3_grid, prob=b3_posterior, size = 1e4, replace = TRUE)
+
+b3_sim <- rbinom(1e4, 100, prob = b3_samples)
+
+ggplot()+
+  geom_histogram(aes(x=b3_sim), bins=75)+
+  geom_vline(xintercept = 49, color="red")
+```
