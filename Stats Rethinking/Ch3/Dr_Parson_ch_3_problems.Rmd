@@ -1,0 +1,319 @@
+---
+title: "Chapter 3 practice problems"
+author: "James Parson"
+date: '2023-09-07'
+output: html_document
+---
+
+
+```{r}
+library(tidyverse)
+library(rethinking)
+```
+
+# Sampling from prior
+
+```{r}
+p_grid <- seq( from=0 , to=1 , length.out=1000 )
+prior <- rep( 1 / 1000 , 1000 )
+samples <- sample( p_grid , prob=prior , size=1e4 , replace=TRUE )
+```
+
+```{r}
+simulated_prior <- rbinom(n = 1e4, size = 15, prob = samples)
+
+ggplot() +
+  geom_histogram(mapping = aes(x = simulated_prior), bins = 100)
+```
+
+# Set-up for E problems
+
+
+```{r}
+p_grid <- seq( from=0 , to=1 , length.out=1000 )
+prior <- rep( 1 , 1000 )
+likelihood <- dbinom( 6 , size=9 , prob=p_grid )
+posterior <- likelihood * prior
+posterior <- posterior / sum(posterior)
+set.seed(100)
+samples <- sample( p_grid , prob=posterior , size=1e4 , replace=TRUE )
+```
+
+# 3E1
+
+```{r}
+sum(samples <= 0.2) / 1e4
+```
+
+#3e2
+
+```{r}
+sum(samples >= 0.8) / 1e4
+```
+
+#3e3
+
+```{r}
+sum(samples > 0.2 & samples < 0.8) / 1e4
+```
+
+#3e4
+```{r}
+quantile(samples, 0.2)
+```
+
+#3e5
+```{r}
+quantile(samples, 0.8)
+```
+
+
+#3e6
+
+```{r}
+HPDI(samples, prob = 0.66)
+```
+
+```{r}
+0.7737738 - 0.5085085
+```
+
+
+#3e7
+
+```{r}
+quantile(samples, c(0.5 - 0.66/2, 0.5 + 0.66/2))
+```
+
+```{r}
+0.7697698 - 0.5025025
+```
+
+A slightly wider interval!
+
+# 3m1
+
+```{r}
+N <- 1e3
+grid <- seq(from = 0, to = 1, length.out = N)
+prior <- rep(1, N)
+likelihood <- dbinom(x = 8, size = 15, prob = grid)
+posterior.raw <- prior * likelihood
+posterior <- posterior.raw / sum(posterior.raw)
+
+ggplot() +
+  geom_line(mapping = aes(x = grid, y = posterior * N))
+```
+I scaled the probabilities in the posterior by N for the graph to match the vertical scale of the density below.
+
+# 3m2
+
+```{r}
+samples <- sample(grid, size = 1e4, replace = TRUE, prob = posterior)
+
+ggplot() +
+  geom_density(mapping = aes(x = samples))
+```
+
+```{r}
+HPDI(samples, prob = 0.9)
+```
+
+```{r}
+water <- rbinom(1e4, 15, prob = samples)
+
+ggplot() +
+  geom_histogram(mapping = aes(x = water), bins = 100)
+```
+
+```{r}
+sum(water == 8) / 1e4
+```
+
+Comparing Bayesian result with maximum-likelihood model.
+
+```{r}
+dbinom(8, 15, prob = 8/15)
+```
+
+Heavier tails in the predictive distribution from the Bayesian model.
+
+```{r}
+max_likelihood <- rbinom(1e4, size = 15, prob = 8 / 15)
+
+ggplot() +
+  geom_freqpoly(mapping = aes(x = water), bins = 100) +
+  geom_freqpoly(mapping = aes(x = max_likelihood), bins = 100, color = "red")
+```
+
+
+#3m4
+
+```{r}
+water2 <- rbinom(1e4, size = 9, prob = samples)
+```
+
+```{r}
+sum(water2 == 6) / 1e4
+```
+
+#3m5
+
+```{r}
+N <- 1e3
+grid <- seq(from = 0, to = 1, length.out = N)
+prior <- as.numeric(grid >= 0.5)
+likelihood <- dbinom(x = 8, size = 15, prob = grid)
+posterior.raw <- prior * likelihood
+posterior <- posterior.raw / sum(posterior.raw)
+
+ggplot() +
+  geom_line(mapping = aes(x = grid, y = posterior * N))
+```
+
+```{r}
+samples <- sample(grid, size = 1e5, replace = TRUE, prob = posterior)
+
+ggplot() +
+  geom_density(mapping = aes(x = samples))
+```
+
+```{r}
+HPDI(samples, prob = 0.9)
+```
+
+```{r}
+water <- rbinom(1e4, 15, prob = samples)
+
+ggplot() +
+  geom_histogram(mapping = aes(x = water), bins = 100)
+```
+
+```{r}
+sum(water == 8) / 1e4
+```
+
+Comparing again with maximum-likelihood model.
+
+```{r}
+dbinom(8, 15, prob = 8/15)
+```
+
+```{r}
+max_likelihood <- rbinom(1e4, size = 15, prob = 8 / 15)
+
+ggplot() +
+  geom_freqpoly(mapping = aes(x = water), bins = 100) +
+  geom_freqpoly(mapping = aes(x = max_likelihood), bins = 100, color = "red")
+```
+
+
+```{r}
+water2 <- rbinom(1e4, size = 9, prob = samples)
+```
+
+```{r}
+sum(water2 == 6) / 1e4
+```
+
+
+# 3m6
+
+Not sure what he is getting at! I'll have to come back to this one.
+
+# 3h1
+
+```{r}
+data(homeworkch3)
+```
+
+```{r}
+N <- 1e3
+prior <- rep(1, N)
+grid <- seq(from = 0, to = 1, length.out = N)
+likelihood <- dbinom(x = 111, size = 200, prob = grid)
+posterior.raw = prior * likelihood
+posterior = posterior.raw / sum(posterior.raw)
+
+ggplot() +
+  geom_line(mapping = aes(x = grid, y = posterior * N))
+
+```
+```{r}
+grid[which.max(posterior)]
+```
+
+```{r}
+111/200
+```
+
+As expected! Maximum posterior probability (flat prior) matches maximum likelihood...
+
+#3h2
+
+```{r}
+samples <- sample(grid, 1e4, replace = TRUE, prob = posterior)
+```
+
+```{r}
+HPDI(samples, prob = c(0.5, 0.89, 0.97))
+```
+
+#3h3
+
+```{r}
+simulated <- rbinom(1e4, size = 200, prob = samples)
+```
+
+```{r}
+ggplot() +
+  geom_density(mapping = aes(x = simulated))
+```
+#3h4
+
+```{r}
+simulated_100 <- rbinom(1e4, size = 100, prob = samples)
+```
+
+```{r}
+ggplot() +
+  geom_density(mapping = aes(x = simulated_100))
+```
+
+```{r}
+sum(birth1) / 100
+```
+
+Seeing at most 51 male births out of 100 is somewhat unusual but not terribly strange.
+
+```{r}
+sum(simulated_100 <= 51) / 1e4
+```
+
+#3h5
+
+```{r}
+births <- tibble(birth1 = birth1, birth2 = birth2)
+```
+
+```{r}
+births %>% filter(birth1 == 0, birth2 == 1) %>% count()
+```
+```{r}
+births %>% filter(birth1 == 0) %>% count()
+```
+```{r}
+simulate_girl_first <- rbinom(n = 1e4, size = 49, prob = samples)
+```
+
+```{r}
+ggplot() +
+  geom_density(mapping = aes(x = simulate_girl_first)) +
+  geom_vline(mapping = aes(xintercept = 39), color = "red")
+```
+
+```{r}
+sum(simulate_girl_first >= 39) / 1e4
+```
+
+Seeing so many male second births given female first birth is very surprising given the model. Sexes of first and second birth do not appear to be independent.
