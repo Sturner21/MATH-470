@@ -60,19 +60,187 @@ There are 3 parameters in the posterior dist.
 
 # 4M1
 
+For the model definition below, simulate observed $y$ values from the prior
+
+$$
+y_i\sim Normal(\mu,\sigma)\\
+\mu\sim Normal(0,10)\\
+\sigma\sim Exponential(1)
+$$
+
+```{r}
+mu <- rnorm(1e4, 0, 10)
+sigma <- rexp(1e4)
+prior_y <- rnorm(1e4, mu, sigma)
+dens(prior_y)
+```
+
 # 4M2
+
+Translate the above model into a `quap` formula
+
+```{r}
+#Should there be a data arguement provided?
+quap(
+  alist(
+    y <- dnorm(mu, sigma),
+    mu <- dnorm(0,10),
+    sigma <- dexp(1)
+  )
+)
+```
 
 # 4M3
 
+Translate the `quap` model below into a mathematical model definition
+
+```{r}
+#| eval: false
+
+y~dnorm(mu,sigma),
+mu <- a + b*x,
+a ~ dnorm(0,10),
+b ~ dunif(0,1),
+sigma ~ dexp(1)
+```
+
+$$
+y_i\sim Normal(\mu,\sigma)\\
+\mu=\alpha+\beta x\\
+\alpha\sim Normal(0,10)\\
+\beta\sim Uniform(0,1)\\
+\sigma\sim Exponential(1)
+$$
+
 # 4M4
+
+A sample of students is measured for height each year for 3 years. After the third year, you want to fit a linear regression predicting height using year as a predictor. Write down the mathematical model definition for this regression, using any variable names and priors you choose. Be prepared to defend your choice of priors.
+
+$$
+Height_i\sim Normal(\mu,\sigma)\\
+\mu=\alpha+\beta x\\
+\alpha\sim Normal(48,4)\\
+\beta\sim Exponential(1)\\
+\sigma\sim Uniform(0,12)
+$$
+
+What my model says is that height, accross all 3 years is normally distributed. However, the mean height, $\mu$, is dependent the average height, $\alpha$, and the growth each year by the population, $\beta$. The average height is normally distributed centered at 48in with a standard deviation of 4in. Our growth change in the population is exponential because we assume kids grow at non-linear rates which allows us to catch this. However, I don't know how exponential functions work in this context so I just put a 1. The standard deviation is uniformly distributed from the lower bound 0, to the upper bound 12, representing that we think \~95% of the population lies between 12 inches of the average, 48 inches.
 
 # 4M5
 
+Now, suppose I remind you that every student got taller each year. Does this information lead you to change your choice of priors? How?
+
+I feel like my priors should stay the same. I already factored in students growing with the exponential function.
+
 # 4M6
+
+Now suppose I tell you that the variance among heights for students of the same age is never more than 64cm. How does this lead you to revise your priors?
+
+64 inches is about 2 feet, which I think my $\sigma$ covers.
 
 # 4M7
 
+Refit the model `m4.3` from the chapter, but omit the mean weight `xbar` this time. Compare the new model's posterior to that of the original model. In particular, look at the covariance among the parameters. What is different? Then compare the posterior predictions of both models.
+
+```{r}
+#Replicate m4.3
+#Load data again
+data("Howell1"); d <- Howell1; d2 <- d[d$age > 18,]
+
+#defin average weight
+xbar <- mean(d2$weight)
+
+#fit model
+m4.3 <- quap(
+  alist(
+    height ~ dnorm(mu, sigma),
+    mu <- a + b*(weight - xbar),
+    a ~ dnorm(178,20),
+    b ~ dlnorm(0,1),
+    sigma ~ dunif(0,50)
+  ), data=d2
+)
+
+precis(m4.3)
+round(vcov(m4.3),3)
+```
+
+```{r}
+#Now replicate without xbar
+
+#fit model
+m4.3.nobar <- quap(
+  alist(
+    height ~ dnorm(mu, sigma),
+    mu <- a + b*(weight),
+    a ~ dnorm(178,20),
+    b ~ dlnorm(0,1),
+    sigma ~ dunif(0,50)
+  ), data=d2
+)
+
+precis(m4.3.nobar)
+round(vcov(m4.3.nobar),3)
+```
+
+Immediately noticeable is that our means changed. It changed by about 39, which is close to our value of `xbar~45`. It did not, however, change our measurement of `b` or `sigma` almost at all. Interestingly though, in our correlation matrix, our `b` and `a` are much more related. I don't know how to interpret that though.
+
 # 4M8
+
+In the chapter, we used 15 knots with the cherry blossom spline. Increase the number of knots and observe what happens to the resulting spline. Then adjust also the width of the prior on the weights-change the standard deviation of the prior and watch what happens. What do you think the combination of knot number and the prior on the weights controls?
+
+This is where I got lost so bear with me.
+
+```{r}
+library(splines)
+```
+
+```{r}
+#Plot the 15 knot splines
+data("cherry_blossoms")
+dc <- cherry_blossoms
+
+dc2 <- dc[complete.cases(dc$doy),]
+num_knots <- 15
+knot_list <- quantile(dc2$year, probs=seq(0,1,length.out=num_knots))
+
+B <- bs(dc2$year,
+        knots = knot_list[-c(1,num_knots)],
+        degree=3, intercept=TRUE)
+
+plot(NULL, xlim=range(dc2$year), ylim=c(0,1), xlab="year", ylab="basis")
+for (i in 1:ncol(B)) lines(dc2$year, B[,i])
+```
+
+```{r}
+#Change knots to 30
+num_knots <- 30
+knot_list <- quantile(dc2$year, probs=seq(0,1,length.out=num_knots))
+
+B <- bs(dc2$year,
+        knots = knot_list[-c(1,num_knots)],
+        degree=3, intercept=TRUE)
+
+plot(NULL, xlim=range(dc2$year), ylim=c(0,1), xlab="year", ylab="basis")
+for (i in 1:ncol(B)) lines(dc2$year, B[,i])
+```
+
+Adding more knots makes it wiggle more?
+
+```{r}
+m4M8 <- quap(
+  alist(
+    D ~ dnorm(mu, sigma),
+    mu <- a + B %*% w,
+    a ~ dnorm(100,10),
+    w ~ dnorm(0,10),
+    sigma ~ dexp(1)
+  ), data=list(dc2$doy, B=B),
+  start = list(w=rep(0,ncol(B)))
+)
+```
+
+Don't know why it's throwing this error
 
 # 4H1
 
