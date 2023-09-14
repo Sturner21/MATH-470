@@ -110,3 +110,214 @@ image_xyz(post$mu, post$sigma, post$prob)
 ```
 
 ## 4.3.4 Sampling from the posterior
+
+```{r}
+sample.rows <- sample(1:nrow(post), size=1e4, replace=TRUE, prob=post$prob)
+sample.mu <- post$mu[sample.rows]
+sample.sigma <- post$sigma[sample.rows]
+plot(sample.mu, sample.sigma, cex=0.5, pch=16, col=col.alpha(rangi2,0.1))
+```
+
+```{r}
+#Marginal posterior density of mu
+dens(sample.mu)
+```
+
+```{r}
+#Marginal posterior density of sigma
+dens(sample.sigma)
+```
+
+```{r}
+PI(sample.mu)
+PI(sample.sigma)
+```
+
+## 4.3.5 Finding the posterior distribution with `quap`
+
+```{r}
+flist <- alist(
+  height ~ dnorm(mu, sigma),
+  mu ~ dnorm(178, 20),
+  sigma ~ dunif(0,50)
+)
+
+m4.1 <- quap(flist, data=d2)
+
+precis(m4.1)
+```
+
+These numbers provide Gaussian approximations for each parameter's marginal distributions. This means the plausibility of each value of $\mu$ after averaging over the plausibilities of each value of $\sigma$, is given by a Gaussian distribution with mean 154.6 and standard deviation of 0.4.
+
+We can change our prior of $\mu$ to be much more concentrated around our mean, signalling that it is much stronger.
+
+```{r}
+m4.2 <- quap(
+  alist(
+    height ~ dnorm(mu, sigma),
+    mu ~ dnorm(178, 0.1),
+    sigma ~ dunif(0,50)
+  ), data = d2
+)
+
+precis(m4.2)
+```
+
+Our estimate for $\mu$ has hardly changed off the prior now because the prior was so much more concentrated. However, our estimate for $\sigma$ has changed a lot even though we didn't change its prior. This is because once the model (a metaphorical golem) is certain the mean is near 178 - as the prior insists - then the model has to estimate a $\sigma$ conditional on that fact. Which results in a different posterior for $\sigma$.
+
+## 4.3.6 Sampling from `quap`
+
+```{r}
+diag(vcov(m4.1))
+cov2cor(vcov(m4.1))
+```
+
+The two element vector (listed first) is the list of variances. Taking the square root of the vector will give the standard deviations shown in the `precis` output of `m4.1`. While the two-by-two matrix represents the correlation (bounded by +1 and -1) between the pairs of parameters. The estimates near 0 for both tell us that learning $\mu$ tells us nothing about $\sigma$ and vice versa.
+
+```{r}
+#Sampling from multidimensional posterior
+post <- extract.samples(m4.1, n=1e4)
+precis(post)
+```
+
+# 4.4 - Linear prediction
+
+```{r}
+plot(d2$height, d2$weight)
+```
+
+## 4.4.1.3 *Priors*
+
+```{r}
+set.seed(2971)
+N <- 100
+a <- rnorm(N, 178, 20)
+b <- rnorm(N, 0, 10)
+```
+
+```{r}
+plot(NULL, xlim=range(d2$weight), ylim=c(-100,400), xlab="weight", ylab="height")
+abline(h=0, lty=2)
+abline(h=272, lty=1, lwd=0.5)
+mtext("b ~ dnorm(0,10)")
+xbar <- mean(d2$weight)
+for(i in 1:N) curve(a[i] + b[i]*(x-xbar), from=min(d2$weight), to=max(d2$weight), add=TRUE, col=col.alpha("black", 0.2))
+```
+
+```{r}
+#Experimenting with b being log-normal
+b <- rlnorm(1e4, 0, 1)
+dens(b, xlim=c(0,5), adj=0.1)
+```
+
+```{r}
+set.seed(2971)
+N <- 100
+a <- rnorm(N, 178, 20)
+b <- rlnorm(N, 0, 1)
+
+plot(NULL, xlim=range(d2$weight), ylim=c(-100,400), xlab="weight", ylab="height")
+abline(h=0, lty=2)
+abline(h=272, lty=1, lwd=0.5)
+mtext("log(b) ~ dnorm(0,1)")
+xbar <- mean(d2$weight)
+for(i in 1:N) curve(a[i] + b[i]*(x-xbar), from=min(d2$weight), to=max(d2$weight), add=TRUE, col=col.alpha("black", 0.2))
+```
+
+## 4.4.2 Finding the posterior distribution
+
+```{r}
+#Load data again
+data("Howell1"); d <- Howell1; d2 <- d[d$age > 18,]
+
+#defin average weight
+xbar <- mean(d2$weight)
+
+#fit model
+m4.3 <- quap(
+  alist(
+    height ~ dnorm(mu, sigma),
+    mu <- a + b*(weight - xbar),
+    a ~ dnorm(178,20),
+    b ~ dlnorm(0,1),
+    sigma ~ dunif(0,50)
+  ), data=d2
+)
+```
+
+### 4.4.3.1 Tables of marginal distributions
+
+```{r}
+precis(m4.3)
+```
+
+The first row gives us the quadratic approximation for $\alpha$, the second row $\beta$, and the third row $\sigma$.
+
+```{r}
+round(vcov(m4.3),3)
+```
+
+### 4.4.3.2 Plotting posterior inference against the data
+
+```{r}
+plot(height ~ weight, data=d2, col=rangi2)
+post <- extract.samples(m4.3)
+a_map <- mean(post$a)
+b_map <- mean(post$b)
+curve(a_map + b_map*(x-xbar), add=TRUE)
+```
+
+### 4.4.3.4 Plotting regression intervals and contours
+
+General recipe for generating predictions and intervals from the posterior of a fit model:
+
+1.  Use `link` to generate distributions of posterior values for $\mu$. The default behavior of `link` is to use the original data, so you have to pass it a list of new horizontal axis values you want to plot posterior predictions across.
+2.  Use summary functions like `mean` or `PI` to find averages and lower and upper bounds of $\mu$ for each value of the predictor variable
+3.  Finally, use plotting functions like `lines` and shade to draw the lines and intervals. Or plot the distributions of predictions, or do further numerical calculations with them.
+
+# 4.5 Curves from lines
+
+## 4.5.1 Polynomial regression
+
+```{r}
+plot(height ~ weight, d)
+```
+
+```{r}
+#Very different than in the book
+data("Howell1")
+d <- Howell1
+
+d$weight_s <- (d$weight - mean(d$weight))/sd(d$weight)
+d$weight_s2 <- d$weight^2
+
+m4.5 <- quap(
+  alist(
+    height ~ dnorm(mu, sigma),
+    mu <- a + b1*weight_s + b2*weight_s2,
+    a ~ dnorm(178, 20),
+    b1 <- dlnorm(0,1),
+    b2 ~ dnorm(0,1),
+    sigma ~ dunif(0,50)
+  ), data=d
+)
+precis(m4.5)
+```
+
+```{r}
+weight.seq <- seq(from=-2.2, to=2, length.out=30)
+pred_dat <- list(weight_s=weight.seq, weight_s2=weight.seq^2)
+mu <- link(m4.5, data=pred_dat)
+mu.mean <- apply(mu, 2, mean)
+mu.PI <- apply(mu, 2, PI, prob=0.89)
+sim.height <- sim(m4.5, data=pred_dat)
+height.PI <- apply(sim.height, 2, PI, prob=0.89)
+```
+
+```{r}
+#Where is the line?
+plot(height ~ weight, d, col=col.alpha(rangi2, 0.5))
+lines(weight.seq, mu.mean)
+shade(mu.PI, weight.seq)
+shade(height.PI, weight.seq)
+```
