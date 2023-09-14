@@ -1,0 +1,152 @@
+---
+title: "Chapter 4 practice"
+format: html
+editor: visual
+---
+
+```{r}
+library(tidyverse)
+```
+
+# E problems
+
+## 4E1
+
+The likelihood is y_i \~ Normal(mu, sigma)
+
+## 4E2
+
+There are two parameters in the posterior distribution, mu and sigma.
+
+## 4E3
+
+Bayes' theorem gives us the following formula for the posterior joint density of $\mu$ and $\sigma$.
+
+$$
+Pr(\mu, \sigma | y_1, \dots, y_n) = \frac{\prod_{i = 1}^n Pr(y_i | \mu, \sigma) \operatorname{Normal}(\mu | 0, 10) \operatorname{Exponential}(\sigma | 1)}
+{\int\int \prod_{i = 1}^n Pr(y_i | \mu, \sigma) \operatorname{Normal}(\mu | 0, 10)\operatorname{Exponential}(\sigma | 1) d\mu d\sigma}
+$$
+
+## 4E4
+
+The linear model is $\mu_i = \alpha + \beta x_i$.
+
+## 4E5
+
+There are three parameters in the posterior distribution.
+
+# M problems
+
+## 4M1
+
+We have the following model:
+
+y_i \~ Normal(mu, sigma)
+
+mu \~ Normal(0, 10)
+
+sigma \~ Exponential(1)
+
+To simulate data from the prior distribution, we first draw 10,000 samples (say) for mu and sigma from the given prior distributions and then draw 10,000 samples (using our mu and sigma samples) from the normal distribution.
+
+```{r}
+N <- 1e4
+mus <- rnorm(N, mean = 0, sd = 10)
+sigmas <- rexp(N, rate = 1)
+ys <- rnorm(N, mean = mus, sd = sigmas)
+```
+
+We can make a density graph of the simulated y values. For comparison, I have overlaid a normal distribution with the same mean and standard deviation as the list of simulated y values. It looks pretty close! (Checking whether the prior distribution of the y values is actually a normal distribution requires some probability theory. Maybe something to do at the end of MATH 351...)
+
+```{r}
+ggplot() +
+  geom_density(mapping = aes(x = ys)) +
+  geom_function(fun = dnorm, args = list(mean = mean(ys), sd = sd(ys)), color = "red")
+```
+
+## 4M2
+
+In `quap` notation, the model looks like this:
+
+```         
+y ~ dnorm(mu, sigma),
+mu ~ dnorm(0, 10),
+sigma ~ dexp(1)
+```
+
+## 4M3
+
+The following mathematical model definition matches the given `quap` formula:
+
+y_i \~ Normal(mu, sigma)
+
+mu_i = a + b x_i
+
+a \~ Normal(0, 10)
+
+b \~ Uniform(0, 1)
+
+sigma \~ Exp(1)
+
+## 4M4
+
+| Student | year | height |
+|---------|------|--------|
+| 1       | 0    | 60     |
+| 1       | 1    | 61     |
+| 1       | 2    | 62     |
+| 2       | 0    | 65     |
+| 2       | 1    | 67     |
+| 2       | 2    | 69     |
+| 3       | 0    | 55     |
+| 3       | 1    | 60     |
+| 3       | 2    | 65     |
+
+In our model, we ignore the "student" column. We model the height column using the year column as predictor. The subscript i indicates the row in the data table. The parameter a is something like the average height in year 0. The parameter b is something like the typical increase in height per year.
+
+height_i \~ Normal(mu_i, sigma)
+
+m_i = a + b year_i
+
+sigma \~ Exp(2)
+
+a \~ Normal(5, 0.5)
+
+b \~ Exp(6)
+
+Likelihood: heights for the students could be normally distributed or a mixture of normal distributions.
+
+Prior on sigma: I am imagining students in middle school (6th, 7th, 8th). Typical differences in height might be 6 inches (1/2 foot). We'll use an exponential distribution.
+
+Prior on a: This would be something like average height among 6th graders. Maybe 5 feet give or take 6 inches to be safe.
+
+Prior on b: This would be something like average height increase per year. This parameter could not be negative! Maybe 2 inches (1/6 foot) would be a reasonable guess for middle school. We'll use an exponential distribution to guarantee positive values. But we could try a log-normal distribution instead.
+
+A richer (multilevel) model would allow for different slopes for each student with pooling. Something like this might work. (But I haven't thought about this at all!)
+
+height_ij \~ Normal(mu_ij, sigma)
+
+mu_ij = a_i + b_i year_j
+
+sigma \~ Exp(2)
+
+a_i \~ Normal(5, 0.5)
+
+b_i \~ Exp(6)
+
+```{r}
+N <- 1e4
+sigmas <- rexp(N, 2)
+as <- rnorm(N, 5, 0.5)
+bs <- rexp(N, 6)
+
+student_simulation <- tibble(year = rep(c(0,1,2), each = N),
+                             height = )
+
+heights <- rnorm(N, mean = as + bs * , sigma = sigmas)
+```
+
+```{r}
+ggplot() +
+  geom_density()
+```
