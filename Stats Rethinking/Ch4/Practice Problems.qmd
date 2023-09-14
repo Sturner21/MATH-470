@@ -1,0 +1,91 @@
+---
+title: "Practice Problems"
+format: html
+---
+
+# Load Libraries
+
+```{r}
+library(rethinking)
+library(tidyverse)
+```
+
+# 4E1
+
+In the model definition, which is the likelihood?
+
+$$
+y_i\sim Normal(\mu,\sigma)\\
+\mu\sim Normal(0,10)\\
+\sigma\sim Exponential(1)
+$$
+
+The likelihood is, $y_i\sim Normal(\mu,\sigma)$
+
+# 4E2
+
+In the model definition above, how many parameters are in the posterior distribution?
+
+There are two parameters, $\mu$ and $\sigma$.
+
+# 4E3
+
+Using the model definition above, write down the appropriate form of Bayes' theorem that includes the proper likelihood and priors
+
+$$
+Pr(\mu,\sigma|y_i)=\frac{\prod_i Normal(y_i|\mu,\sigma)Normal(\mu|0,10)Exponential(\sigma|1)}{\int\int\prod_i Normal(y_i|\mu,\sigma)Normal(\mu|0,10)Exponential(\sigma|1)d\mu d\sigma}
+$$
+
+(Used formatting of Bayes on page 84)
+
+# 4E4
+
+In the model definition, which line is the linear model?
+
+$$
+y_i\sim Normal(\mu, \sigma)\\
+\mu_i=\alpha+\beta x_i\\
+\alpha\sim Normal(0,10)\\
+\beta\sim Normal(0,1)\\
+\sigma\sim Exponential(2)
+$$
+
+In this model, the $\mu_i=\alpha+\beta x_i$ is the linear model.
+
+# 4E5
+
+In the model definition for 4E4, how many parameters are in the posterior distribution?
+
+There are 3 parameters in the posterior dist.
+
+# 4M1
+
+# 4M2
+
+# 4M3
+
+# 4M4
+
+# 4M5
+
+# 4M6
+
+# 4M7
+
+# 4M8
+
+# 4H1
+
+# 4H2
+
+# 4H3
+
+# 4H4
+
+# 4H5
+
+# 4H6
+
+# 4H7
+
+# 4H8
