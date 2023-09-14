@@ -5,7 +5,6 @@ date: '2023-09-07'
 output: html_document
 ---
 
-
 ```{r}
 library(tidyverse)
 library(rethinking)
@@ -27,7 +26,6 @@ ggplot() +
 ```
 
 # Set-up for E problems
-
 
 ```{r}
 p_grid <- seq( from=0 , to=1 , length.out=1000 )
@@ -58,15 +56,16 @@ sum(samples > 0.2 & samples < 0.8) / 1e4
 ```
 
 #3e4
+
 ```{r}
 quantile(samples, 0.2)
 ```
 
 #3e5
+
 ```{r}
 quantile(samples, 0.8)
 ```
-
 
 #3e6
 
@@ -77,7 +76,6 @@ HPDI(samples, prob = 0.66)
 ```{r}
 0.7737738 - 0.5085085
 ```
-
 
 #3e7
 
@@ -104,6 +102,7 @@ posterior <- posterior.raw / sum(posterior.raw)
 ggplot() +
   geom_line(mapping = aes(x = grid, y = posterior * N))
 ```
+
 I scaled the probabilities in the posterior by N for the graph to match the vertical scale of the density below.
 
 # 3m2
@@ -145,7 +144,6 @@ ggplot() +
   geom_freqpoly(mapping = aes(x = water), bins = 100) +
   geom_freqpoly(mapping = aes(x = max_likelihood), bins = 100, color = "red")
 ```
-
 
 #3m4
 
@@ -207,7 +205,6 @@ ggplot() +
   geom_freqpoly(mapping = aes(x = max_likelihood), bins = 100, color = "red")
 ```
 
-
 ```{r}
 water2 <- rbinom(1e4, size = 9, prob = samples)
 ```
@@ -215,7 +212,6 @@ water2 <- rbinom(1e4, size = 9, prob = samples)
 ```{r}
 sum(water2 == 6) / 1e4
 ```
-
 
 # 3m6
 
@@ -239,6 +235,7 @@ ggplot() +
   geom_line(mapping = aes(x = grid, y = posterior * N))
 
 ```
+
 ```{r}
 grid[which.max(posterior)]
 ```
@@ -269,6 +266,7 @@ simulated <- rbinom(1e4, size = 200, prob = samples)
 ggplot() +
   geom_density(mapping = aes(x = simulated))
 ```
+
 #3h4
 
 ```{r}
@@ -299,9 +297,11 @@ births <- tibble(birth1 = birth1, birth2 = birth2)
 ```{r}
 births %>% filter(birth1 == 0, birth2 == 1) %>% count()
 ```
+
 ```{r}
 births %>% filter(birth1 == 0) %>% count()
 ```
+
 ```{r}
 simulate_girl_first <- rbinom(n = 1e4, size = 49, prob = samples)
 ```
