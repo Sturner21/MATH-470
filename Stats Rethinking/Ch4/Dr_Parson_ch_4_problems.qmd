@@ -135,18 +135,144 @@ a_i \~ Normal(5, 0.5)
 b_i \~ Exp(6)
 
 ```{r}
-N <- 1e4
+N <- 1e1
 sigmas <- rexp(N, 2)
 as <- rnorm(N, 5, 0.5)
 bs <- rexp(N, 6)
 
-student_simulation <- tibble(year = rep(c(0,1,2), each = N),
-                             height = )
-
-heights <- rnorm(N, mean = as + bs * , sigma = sigmas)
+student_simulation <- tibble(replication = rep(1:N, times = 3),
+                             year = rep(c(0,1,2), each = N),
+                             a = rep(as, times = 3),
+                             b = rep(bs, times = 3),
+                             sigma = rep(sigmas, times = 3),
+                             height = rnorm(3*N, mean = a + b*year, sd = sigma))
 ```
 
 ```{r}
-ggplot() +
-  geom_density()
+ggplot(data = student_simulation) +
+  geom_point(mapping = aes(x = factor(year), y = height)) +
+  geom_line(mapping = aes(x = factor(year), y = height, group = replication))
+```
+
+Huh! Sometimes students shrink, according to this model. To make this work better, one might consider a time-series model instead of a generic regression model with time as a predictor.
+
+## 4M5
+
+The model above already includes a prior for the slope that does not allow negative slopes. The problem with the model is that it does not remember how tall students are from year to year. The random component of the prediction (likelihood) is intended to reflect between-student variability in heights. But that leads to occasional shrinking when we track one person.
+
+I guess that's not how we should use the model. We cannot model the growth of a singular person with this set-up. What we are modeling is the heights of sixth graders, seventh graders, and eighth graders as groups.
+
+The following chunks simulate 100 sixth graders, 100 seventh graders, and 100 eighth graders. We can see that the prior is not great, since it has too much variability.
+
+```{r}
+N <- 1e2
+sigmas <- rexp(3*N, 2)
+as <- rnorm(3*N, 5, 0.5)
+bs <- rexp(3*N, 6)
+
+student_simulation2 <- tibble(year = rep(c(0,1,2), each = N),
+                             a = as,
+                             b = bs,
+                             sigma = sigmas,
+                             height = rnorm(3*N, mean = a + b*year, sd = sigma))
+```
+
+```{r}
+ggplot(data = student_simulation2) +
+  geom_jitter(mapping = aes(x = factor(year), y = height), height = 0, width = 0.1, alpha = 0.2)
+```
+
+The confusing part of the problem statement is the tracking of heights over three years. It might be clearer framed as data about students in a middle school.
+
+## 4M6
+
+The word "variance" is a strange choice! I think what McElreath has in mind, though, is that we could limit sigma above in some way by 64 cm. I'm not sure exactly what "variance" means here. Maybe we could use sigma \~ Uniform(0, 64 / (2.54 \* 12)).
+
+## 4M7
+
+```{r}
+library(rethinking)
+data(Howell1)
+```
+
+```{r}
+d2 <- Howell1 %>% filter(age >= 18)
+
+xbar <- d2 %>% summarize(m = mean(weight)) %>% pull(m)
+```
+
+```{r}
+m4.3 <- quap(
+  alist(
+    height ~ dnorm( mu , sigma ) ,
+    mu <- a + b*( weight - xbar ) ,
+    a ~ dnorm( 178 , 20 ) ,
+    b ~ dlnorm( 0 , 1 ) ,
+    sigma ~ dunif( 0 , 50 )
+    ) , data=d2 )
+
+precis(m4.3)
+```
+
+```{r}
+post <- extract.samples(m4.3)
+
+post %>% pull(a) %>% quantile(c(0.05, 0.95))
+```
+
+```{r}
+PI(post %>% pull(a), prob = 0.9)
+```
+
+```{r}
+m4.3v2 <- quap(
+  alist(
+    height ~ dnorm( mu , sigma ) ,
+    mu <- a + b * weight ,
+    a ~ dnorm( 178 , 20 ) ,
+    b ~ dlnorm( 0 , 1 ) ,
+    sigma ~ dunif( 0 , 50 )
+    ) , data=d2 )
+```
+
+```{r}
+post2 <- extract.samples(m4.3v2)
+vcov(m4.3v2)
+```
+
+```{r}
+sim.height <- sim(m4.3, data = list(weight = 50))
+ggplot() + 
+  geom_density(mapping = aes(x = sim.height))
+```
+
+```{r}
+quantile(sim.height, c(0.025, 0.975))
+```
+
+```{r}
+sim.heightv2 <- sim(m4.3v2, data = list(weight = 50))
+ggplot() + 
+  geom_density(mapping = aes(x = sim.heightv2))
+```
+
+```{r}
+quantile(sim.heightv2, c(0.025, 0.975))
+```
+
+## 4M8
+
+# H problems
+
+## 4H1
+
+```{r}
+newdata <- c(46.95, 43.72, 64.78, 32.59, 54.63)
+sim.height.new <- sim(m4.3v2, data = list(weight = newdata))
+
+for(i in 1:5){
+  print(round(mean(sim.height.new[, i]), 1))
+  print(round(PI(sim.height.new[,i]), 1))
+}
+
 ```
