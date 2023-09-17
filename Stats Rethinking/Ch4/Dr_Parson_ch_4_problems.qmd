@@ -190,6 +190,10 @@ The word "variance" is a strange choice! I think what McElreath has in mind, tho
 
 ## 4M7
 
+Refitting model changes `a`, as one would expect, but the model predictions are the same.
+
+*Regression and Other Stories* (<https://avehtari.github.io/ROS-Examples/>) suggests centering predictors so that one can assign meaningful priors.
+
 ```{r}
 library(rethinking)
 data(Howell1)
@@ -230,7 +234,7 @@ m4.3v2 <- quap(
     height ~ dnorm( mu , sigma ) ,
     mu <- a + b * weight ,
     a ~ dnorm( 178 , 20 ) ,
-    b ~ dlnorm( 0 , 1 ) ,
+    b ~ dnorm( 1 , 2 ) ,
     sigma ~ dunif( 0 , 50 )
     ) , data=d2 )
 ```
@@ -260,11 +264,97 @@ ggplot() +
 quantile(sim.heightv2, c(0.025, 0.975))
 ```
 
+```{r}
+m4.3v3 <- quap(
+  alist(
+    height ~ dnorm( mu , sigma ) ,
+    mu <- a + b*( weight - xbar ) + c * male ,
+    mu2 <- a + b*(50 - xbar),
+    a ~ dnorm( 178 , 20 ) ,
+    b ~ dlnorm( 0 , 1 ) ,
+    c ~ dnorm( 0, 1 ),
+    sigma ~ dunif( 0 , 50 )
+    ) , data=d2 )
+
+post <- extract.samples(m4.3v3)
+
+post %>% pull(c) %>% quantile(c(0.05, 0.95))
+```
+
 ## 4M8
+
+I'll have to come back to this one later! I am feeling too lazy to study the syntax for fitting spline models at the moment.
+
+For general information on splines (and polynomial fits) see Chapter 7 of *Statistical Learning* (<https://www.statlearning.com>).
+
+```{r}
+data("cherry_blossoms")
+
+ggplot(data = cherry_blossoms) +
+  geom_point(mapping = aes(x = year, y = doy))
+```
+
+```{r}
+cherry_full <- cherry_blossoms %>% drop_na(doy)
+num_knots <- 15
+knot_list <- quantile( cherry_full %>% pull(year) , probs=seq(0, 1, length.out=num_knots) )
+```
+
+```{r}
+library(splines)
+B <- bs(cherry_full %>% pull(year),
+        knots = knot_list[-c(1,num_knots)], degree=3 , intercept=TRUE )
+cherry_full <- cherry_blossoms %>% drop_na(doy)
+num_knots <- 15
+knot_list <- quantile( cherry_full %>% pull(year) , probs=seq(0, 1, length.out=num_knots) )
+```
+
+The following chunk is copied from the textbook.
+
+```{r}
+plot( NULL , xlim=range(cherry_full$year) , ylim=c(0,1) , xlab="year" , ylab="basis" )
+for ( i in 1:ncol(B) ) lines( cherry_full$year , B[,i] )
+```
+
+```{r}
+m4.7 <- quap(
+  alist(
+    D ~ dnorm( mu , sigma ) ,
+    mu <- a + B %*% w ,
+    a ~ dnorm(100,10),
+    w ~ dnorm(0,100),
+    sigma ~ dexp(1)
+    ),
+  data=list( D= cherry_full %>% pull(doy), B = B ) ,
+  start=list( w=rep( 0 , ncol(B) ) ) )
+```
+
+```{r}
+post <- extract.samples( m4.7 )
+w <- apply( post$w , 2 , mean )
+plot( NULL , xlim = range(cherry_full$year) ,
+      ylim=c(-6,6) , xlab="year" , ylab="basis * weight" )
+for ( i in 1:ncol(B) ) lines( cherry_full$year , w[i]*B[,i] )
+```
+
+```{r}
+mu <- link( m4.7 )
+mu_PI <- apply(mu,2,PI,0.97)
+plot( cherry_full$year , cherry_full$doy , col=col.alpha(rangi2, 0.3) , pch=16, 
+      shade( mu_PI , cherry_full$year , col=col.alpha("black",0.5) ))
+```
+
+With 100 knots, the model is very flexible and matches data fluctuations on small scales.
+
+With 5 knots, the model is not flexible at all and only reflects long-term trends. (I like 5 knots!)
+
+Increasing the standard deviation on the prior for the weights (say from 10 to 100) also increases the flexibility of the model but not as dramatically as increasing the number of knots.
 
 # H problems
 
 ## 4H1
+
+There should be a better way to organize displaying this work! If only the commands were made to give tidy outputs...
 
 ```{r}
 newdata <- c(46.95, 43.72, 64.78, 32.59, 54.63)
@@ -274,5 +364,393 @@ for(i in 1:5){
   print(round(mean(sim.height.new[, i]), 1))
   print(round(PI(sim.height.new[,i]), 1))
 }
+```
 
+This question is somewhat silly. Who measures the weight of an adult to within 10 grams? Why bother when the resulting prediction intervals for height are so wide?
+
+## 4H2
+
+### Part a
+
+We should do all the manipulations using `tidyverse`! I recommend barring `[ ] $`.
+
+```{r}
+howell_young <- Howell1 %>% filter(age < 18)
+```
+
+```{r}
+young_fit <- quap(
+  alist(height ~ dnorm(mu, sigma),
+        mu <- a + b * (weight - mean(weight)),
+        a ~ dnorm(100, 20),
+        b ~ dlnorm(1, 1),
+        sigma ~ dunif(0, 50)
+        ), data = howell_young
+)
+```
+
+```{r}
+precis(young_fit)
+```
+
+For comparison, we can fit a traditional `lm` model. The coefficients and standard errors are essentially the same! Since we have so much data, the priors do not much matter. (And the `quap` approximation also works like `lm`.)
+
+```{r}
+howell_young <- howell_young %>% mutate(c.weight = weight - mean(weight))
+lm(height ~ c.weight, data = howell_young) %>% summary
+```
+
+A 10 kg difference in weight is associated with a 27 cm difference in height.
+
+### Part b
+
+```{r}
+xbar <- howell_young %>% summarize(m = mean(weight)) %>% pull(m)
+```
+
+```{r}
+samples <- extract.samples(young_fit)
+N <- 20
+xs <- seq(from = 4, to = 45, length.out = N) - xbar
+mu_min <- rep(0, times = N)
+mu_max <- rep(0, times = N)
+pred_min <- rep(0, times = N)
+pred_max <- rep(0, times = N)
+
+for (i in 1:20){
+  q <- samples %>% mutate(mu = a + b * xs[i],
+                     pred = rnorm(nrow(samples), mu, sigma)) %>%
+    summarize(q_mu_low = quantile(mu, 0.055),
+              q_mu_high = quantile(mu, 0.945),
+              q_pred_low = quantile(pred, 0.055),
+              q_pred_high = quantile(pred, 0.945))
+  mu_min[i] <- q %>% pull(q_mu_low)
+  mu_max[i] <- q %>% pull(q_mu_high)
+  pred_min[i] <- q %>% pull(q_pred_low)
+  pred_max[i] <- q %>% pull(q_pred_high)
+}
+
+strips <- tibble(mu_min = mu_min, mu_max = mu_max,
+                 pred_min = pred_min, pred_max = pred_max)
+```
+
+```{r}
+ggplot(data = howell_young) +
+  geom_ribbon(data = strips,
+              mapping = aes(x = xs + xbar, ymin = mu_min, ymax = mu_max),
+              alpha = 0.2) +
+  geom_ribbon(data = strips,
+              mapping = aes(x = xs + xbar, ymin = pred_min, ymax = pred_max),
+              alpha = 0.3) +
+  geom_point(mapping = aes(x = weight, y = height), shape = 1, color = "blue", alpha = 0.5) +
+  geom_function(fun = function(x){108.31 + 2.72 * (x - xbar)}) +
+  labs(x = "weight (kg)", y = "height (cm)") +
+  theme_bw()
+```
+
+This model does not fit the data well. The scatterplot shows clear non-linearity. Many observations at the low and high ends of weight fall outside of the prediction interval. The conditional means clearly do not fall in the (very narrow) interval for the means.
+
+### Part c
+
+We need to use a non-linear model!
+
+## 4H3
+
+I did not know what to do for the prior on this one. My first choice was horrible, and the posterior model did not fit the data well. I checked the model from `lm` (matching a "non-informative prior") and adjusted my prior to be much more flexible. This model now essentially reproduces `lm`.
+
+```{r}
+log_fit <- quap(
+  alist(height ~ dnorm(mu, sigma),
+        mu <- a + b * log(weight),
+        a ~ dnorm(0, 20),
+        b ~ dnorm(0, 40),
+        sigma ~ dunif(0, 50)),
+  data = Howell1
+)
+
+precis(log_fit)
+```
+
+```{r}
+ggplot(data = Howell1) +
+  geom_point(mapping = aes(x = weight, y = height)) +
+  geom_function(fun = function(x)(-23.70 + 47.05 * log(x)))
+```
+
+```{r}
+lm(height ~ log(weight), data = Howell1) %>% summary
+```
+
+The following code produces the 97% interval for the mean and the 97% interval for the predicted heights.
+
+```{r}
+samples <- extract.samples(log_fit)
+N <- 20
+xs <- seq(from = 4, to = 63, length.out = N)
+mu_min <- rep(0, times = N)
+mu_max <- rep(0, times = N)
+pred_min <- rep(0, times = N)
+pred_max <- rep(0, times = N)
+
+for (i in 1:20){
+  q <- samples %>% mutate(mu = a + b * log(xs[i]),
+                     pred = rnorm(nrow(samples), mu, sigma)) %>%
+    summarize(q_mu_low = quantile(mu, 0.015),
+              q_mu_high = quantile(mu, 0.985),
+              q_pred_low = quantile(pred, 0.015),
+              q_pred_high = quantile(pred, 0.985))
+  mu_min[i] <- q %>% pull(q_mu_low)
+  mu_max[i] <- q %>% pull(q_mu_high)
+  pred_min[i] <- q %>% pull(q_pred_low)
+  pred_max[i] <- q %>% pull(q_pred_high)
+}
+
+strips <- tibble(mu_min = mu_min, mu_max = mu_max,
+                 pred_min = pred_min, pred_max = pred_max)
+```
+
+```{r}
+ggplot(data = Howell1) +
+  geom_ribbon(data = strips,
+              mapping = aes(x = xs, ymin = mu_min, ymax = mu_max),
+              alpha = 0.4) +
+  geom_ribbon(data = strips,
+              mapping = aes(x = xs, ymin = pred_min, ymax = pred_max),
+              alpha = 0.3) +
+  geom_point(mapping = aes(x = weight, y = height), shape = 1, color = "blue", alpha = 0.5) +
+  geom_function(fun = function(x)(-23.70 + 47.05 * log(x))) +
+  labs(x = "weight (kg)", y = "height (cm)") +
+  theme_bw()
+```
+
+This model looks much better, though the prediction intervals seem too wide for low weights and to narrow for high weights. Perhaps `sigma` could vary with the weight...
+
+## 4H4
+
+The quadratic model has the following likelihood:
+
+height \~ Normal(mu, sigma)
+
+mu = a + b_1 weight_s + b_2 weight_s\^2,
+
+where weight_s is standardized (z-score) weight.
+
+The following chunk simulates data for various choices of prior.
+
+```{r}
+N = nrow(Howell1)
+howell_quadratic <- Howell1 %>% mutate(weight_s = (weight - mean(weight)) / sd(weight),
+                                       weight_s2 = weight_s^2,
+                                       a = rnorm(N, 178, 20),
+                                       b1 = rlnorm(N, 2.5, 1),
+                                       b2 = rnorm(N, -20, 1),
+                                       sigma = runif(N, 0, 10),
+                                       mu = a + b1 * weight_s + b2 * weight_s^2,
+                                       height_sim = rnorm(N, mu, sigma)
+                                       )
+```
+
+```{r}
+ggplot(data = howell_quadratic) +
+  geom_point(mapping = aes(x = weight, y = height_sim))
+```
+
+One could keep on fiddling... but the text asks us not to fit a model by hand.
+
+## 4H5
+
+```{r}
+cherry_temp <- cherry_blossoms %>% drop_na(doy, temp)
+
+ggplot(data = cherry_temp) +
+  geom_point(mapping = aes(x = temp, y = doy))
+```
+
+```{r}
+linear_fit <- quap(
+  alist(doy ~ dnorm(mu, sigma),
+        mu <- a + b * (temp - mean(temp)),
+        a ~ dnorm(100, 20),
+        b ~ dnorm(10, 10),
+        sigma ~ dexp(1/10)),
+  data = cherry_temp
+)
+
+precis(linear_fit)
+```
+
+Perhaps I should have started with a prior predictive check.
+
+```{r}
+N <- nrow(cherry_temp)
+prior_predictive <- cherry_temp %>% mutate(a = rnorm(N, 100, 20),
+                                           b = rnorm(N, 10, 10),
+                                           sigma = rexp(N, 1/10),
+                                           mu = a + b * (temp - mean(temp)),
+                                           sim_day = rnorm(N, mu, sigma))
+
+ggplot(data = prior_predictive) +
+  geom_point(mapping = aes(x = temp, y = sim_day))
+```
+
+This looks fine, I think, for a prior model. There is too much variability---sometimes we predict blossom before day 0!\--but it looks like a reasonable starting point.
+
+We can try a posterior predictive check as well.
+
+```{r}
+post <- extract.samples(linear_fit)
+
+posterior_predictive <- cherry_temp %>% cbind(slice_head(post, n = N)) %>%
+  mutate(mu = a + b * (temp - mean(temp)),
+         doy_sim = rnorm(N, mu, sigma))
+
+ggplot(data = posterior_predictive) +
+  geom_point(mapping = aes(x = temp, y = doy_sim))
+```
+
+```{r}
+samples <- extract.samples(linear_fit)
+N <- 20
+xs <- seq(from = 4.5, to = 8.5, length.out = N)
+mu_min <- rep(0, times = N)
+mu_max <- rep(0, times = N)
+pred_min <- rep(0, times = N)
+pred_max <- rep(0, times = N)
+xbar <- cherry_temp %>% summarize(m = mean(temp)) %>% pull(m)
+
+for (i in 1:20){
+  q <- samples %>% mutate(mu = a + b * (xs[i] - xbar),
+                     pred = rnorm(nrow(samples), mu, sigma)) %>%
+    summarize(q_mu_low = quantile(mu, 0.015),
+              q_mu_high = quantile(mu, 0.985),
+              q_pred_low = quantile(pred, 0.015),
+              q_pred_high = quantile(pred, 0.985))
+  mu_min[i] <- q %>% pull(q_mu_low)
+  mu_max[i] <- q %>% pull(q_mu_high)
+  pred_min[i] <- q %>% pull(q_pred_low)
+  pred_max[i] <- q %>% pull(q_pred_high)
+}
+
+strips <- tibble(mu_min = mu_min, mu_max = mu_max,
+                 pred_min = pred_min, pred_max = pred_max)
+```
+
+```{r}
+ggplot(data = cherry_temp) +
+  geom_ribbon(data = strips,
+              mapping = aes(x = xs, ymin = mu_min, ymax = mu_max),
+              alpha = 0.4) +
+  geom_ribbon(data = strips,
+              mapping = aes(x = xs, ymin = pred_min, ymax = pred_max),
+              alpha = 0.3) +
+  geom_point(mapping = aes(x = temp, y = doy), shape = 1, color = "blue", alpha = 0.5) +
+  geom_function(fun = function(x)(104.92 + (-2.98) * (x - xbar))) +
+  labs(x = "March temperature (C)",
+       y = "Blossom date (day of year") +
+  theme_bw()
+```
+
+I am content with this linear model!
+
+## 4H6
+
+```{r}
+cherry_full <- cherry_blossoms %>% drop_na(doy)
+num_knots <- 15
+knot_list <- quantile( cherry_full %>% pull(year) , probs=seq(0, 1, length.out=num_knots) )
+```
+
+```{r}
+library(splines)
+B <- bs(cherry_full %>% pull(year),
+        knots = knot_list[-c(1,num_knots)], degree=3 , intercept=TRUE )
+cherry_full <- cherry_blossoms %>% drop_na(doy)
+```
+
+```{r}
+cherry_refit <- quap(
+  alist(
+    D ~ dnorm( mu , sigma ) ,
+    mu <- a + B %*% w ,
+    a ~ dnorm(100,10),
+    w ~ dnorm(0,10),
+    sigma ~ dexp(1)
+    ),
+  data=list( D= cherry_full %>% pull(doy), B = B ) ,
+  start=list( w=rep( 0 , ncol(B) ) ) )
+
+precis(cherry_refit)
+```
+
+```{r}
+post <- extract.samples( cherry_refit )
+w <- apply( post$w , 2 , mean )
+plot( NULL , xlim = range(cherry_full$year) ,
+      ylim=c(-6,6) , xlab="year" , ylab="basis * weight" )
+for ( i in 1:ncol(B) ) lines( cherry_full$year , w[i]*B[,i] )
+```
+
+```{r}
+mu <- link( cherry_refit )
+mu_PI <- apply(mu,2,PI,0.97)
+plot( cherry_full$year , cherry_full$doy , col=col.alpha(rangi2, 0.3) , pch=16, 
+      shade( mu_PI , cherry_full$year , col=col.alpha("black",0.5) ))
+```
+
+Not sure what this question is getting at. When I change the mean on the prior for the weights, the fitting procedure compensates by adjusting a. I end up with essentially the same final model.
+
+## 4H7
+
+What happened to 4H7?
+
+## 4H8
+
+We refit the model without an intercept term. To do that, we change the call to "bs", using `intercept = FALSE` and including all the knots (instead of dropping the first).
+
+```{r}
+cherry_full <- cherry_blossoms %>% drop_na(doy)
+num_knots <- 15
+knot_list <- quantile( cherry_full %>% pull(year) , probs=seq(0, 1, length.out=num_knots) )
+```
+
+```{r}
+library(splines)
+B <- bs(cherry_full %>% pull(year),
+        knots = knot_list, degree=3 , intercept = FALSE )
+cherry_full <- cherry_blossoms %>% drop_na(doy)
+```
+
+Removing the intercept means that we need to change the priors. I'm not sure what to expect, but we can set the means for the spline terms to the old mean for the intercept.
+
+```{r}
+cherry_no_intercept <- quap(
+  alist(
+    D ~ dnorm( mu , sigma ) ,
+    mu <- B %*% w ,
+    w ~ dnorm(100,100),
+    sigma ~ dexp(1)
+    ),
+  data=list( D= cherry_full %>% pull(doy), B = B ) ,
+  start=list( w=rep( 100 , ncol(B) ) ) )
+
+precis(cherry_no_intercept, depth = 2)
+```
+
+Here are the spline terms, with large weights, as expected.
+
+```{r}
+post <- extract.samples( cherry_no_intercept )
+w <- apply( post$w , 2 , mean )
+plot( NULL , xlim = range(cherry_full$year) ,
+      ylim=c(0,120) , xlab="year" , ylab="basis * weight" )
+for ( i in 1:ncol(B) ) lines( cherry_full$year , w[i]*B[,i] )
+```
+
+And here is the model, the same as before.
+
+```{r}
+mu <- link( cherry_no_intercept )
+mu_PI <- apply(mu,2,PI,0.97)
+plot( cherry_full$year , cherry_full$doy , col=col.alpha(rangi2, 0.3) , pch=16, 
+      shade( mu_PI , cherry_full$year , col=col.alpha("black",0.5) ))
 ```
