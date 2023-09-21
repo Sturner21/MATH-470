@@ -94,7 +94,55 @@ For a similar reasons above as to why informative priors reduce overfitting. Mak
 
 # 7H1
 
-In 2007, *The Wall Street Journal* published an editorial with a graph
+In 2007, *The Wall Street Journal* published an editorial with a graph of corporate tax rates in 29 countries plotted against tax revenue. A badly fit curve was drawn in, seemingly by hand, to make the argument that the relationship between tax rate and tax revenue increases and then declines, such that higher tax rates can actually produce less tax revenue. I want you to actually fit a curve to these data, found in `data(Laffer)`. Consider models that use tax rate to predict tax revenue. Compare, using WAIC or PSIS, a straight line model to any curved models you like. What do you conclude about the relationship between tax rate and tax revenue?
+
+```{r}
+#Load in and observe data
+data(Laffer)
+head(Laffer)
+```
+
+```{r}
+#Make models
+#Quickly checked Laffer to see what my priors should be. Not sure if I was supposed to do that
+m7H1.1 <- quap(
+  alist(
+    tax_revenue ~ dnorm(mu, exp(sigma)),
+    mu <- a + b*tax_rate,
+    a ~ dnorm(20, 10),
+    b ~ dnorm(0, 10),
+    sigma ~ dnorm(0,1)
+  ), data=Laffer
+)
+
+m7H1.2 <- quap(
+  alist(
+    tax_revenue ~ dnorm(mu, exp(sigma)),
+    mu <- a + b[1]*tax_rate + b[2]*tax_rate,
+    a ~ dnorm(20, 10),
+    b ~ dnorm(0, 10),
+    sigma ~ dnorm(0,1)
+  ), data=Laffer, start = list(b=rep(0,2))
+)
+```
+
+```{r}
+#See what these curves should generally looks like
+ggplot(data=Laffer)+
+  aes(x=tax_rate, y=tax_revenue)+
+  geom_point()+
+  geom_smooth(method="lm", color="red", se=F)+
+  stat_smooth(method="lm", formula = y ~ x + I(x^2), color="blue", se=F)
+```
+
+```{r}
+#I can't read either of these outputs
+compare(m7H1.1, m7H1.2, func = WAIC)
+```
+
+```{r}
+compare(m7H1.1, m7H1.2, func = PSIS)
+```
 
 # 7H2
 
