@@ -80,6 +80,10 @@ What happens to the effective number of parameters, as measured by PSIS or WAIC,
 
 Shouldn't it become smaller? Since as you get more data they will drown out the noise of overfitting created by the extra parameters.
 
+```{r}
+
+```
+
 # 7M5
 
 Provide an informal explanation of why informative priors reduce overfitting.
