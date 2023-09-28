@@ -153,6 +153,15 @@ Doesn't appear that they change the interaction effect at all.
 
 Return to the `data(tulips)` example in the chapter. Now include the `bed` variable as a predictor in the interaction model. Don't interact `bed` with the other predictors; just include it a s a main effect. Not that `bed` is categorical. So to use it properly, you will need to either construct dummy variables or rather an index variable, as explained in Chapter 5.
 
+How do you make a index variable?
+
+```{r}
+#We'll make a bed dummy called bed_d where 0=a and 1=b, but what to do with c?
+d %>% 
+  mutate(bed_d = case_when(bed=="a" ~ 0,
+                   bed=="b" ~ 1), .after=bed)
+```
+
 # 8H2
 
 # 8H3
