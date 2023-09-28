@@ -81,7 +81,66 @@ What happens to the effective number of parameters, as measured by PSIS or WAIC,
 Shouldn't it become smaller? Since as you get more data they will drown out the noise of overfitting created by the extra parameters.
 
 ```{r}
+#Load his data on cars and create model with "quap"
+data(cars)
+m <- quap(
+  alist(
+    dist ~ dnorm(mu,sigma),
+    mu <- a + b*speed,
+    a ~ dnorm(0,100),
+    b ~ dnorm(0,10),
+    sigma ~ dexp(1)
+  ) , data=cars )
+set.seed(94)
+post <- extract.samples(m,n=1000)
+```
 
+```{r}
+n_samples <- 1000
+logprob <- sapply( 1:n_samples ,
+  function(s) {
+    mu <- post$a[s] + post$b[s]*cars$speed
+    dnorm( cars$dist , mu , post$sigma[s] , log=TRUE )
+  } )
+
+n_cases <- nrow(cars)
+lppd <- sapply( 1:n_cases , function(i) log_sum_exp(logprob[i,]) - log(n_samples) )
+
+pWAIC <- sapply( 1:n_cases , function(i) var(logprob[i,]) )
+
+sum(pWAIC)
+```
+
+```{r}
+lm(data=cars, dist ~ speed) %>% 
+  summary()
+```
+
+```{r}
+m <- quap(
+  alist(
+    dist ~ dnorm(mu,sigma),
+    mu <- a + b*speed,
+    a ~ dnorm(-17.6, 1),
+    b ~ dnorm(3.9,0.1),
+    sigma ~ dnorm(15,2)
+  ) , data=cars )
+set.seed(94)
+post <- extract.samples(m,n=1000)
+
+n_samples <- 1000
+logprob <- sapply( 1:n_samples ,
+  function(s) {
+    mu <- post$a[s] + post$b[s]*cars$speed
+    dnorm( cars$dist , mu , post$sigma[s] , log=TRUE )
+  } )
+
+n_cases <- nrow(cars)
+lppd <- sapply( 1:n_cases , function(i) log_sum_exp(logprob[i,]) - log(n_samples) )
+
+pWAIC <- sapply( 1:n_cases , function(i) var(logprob[i,]) )
+
+sum(pWAIC)
 ```
 
 # 7M5
