@@ -1,0 +1,37 @@
+---
+title: "Rough Analysis"
+format: html
+---
+
+# Load Libraries
+
+## Installing Lahman
+
+```{r}
+#| eval: false
+
+#Installing Lahman is easy and simply requires running this code chunk
+
+install.packages("Lahman")
+library(Lahman)
+```
+
+## Loading Lahman
+
+```{r}
+#There are more datasets in Lahman than we care about so we'll select "Batting"
+
+Batting <- Lahman::Batting
+```
+
+The `Batting` data set describes hitting outcomes for each MLB player each year from 1871-present. The explanation of the variable abbreviations is available on page 14 of [this document](https://cran.r-project.org/web/packages/Lahman/Lahman.pdf).
+
+## Load Other Libraries
+
+```{r}
+#Of course we need the other two main libraries
+library(tidyverse)
+library(rethinking)
+```
+
+# Quap

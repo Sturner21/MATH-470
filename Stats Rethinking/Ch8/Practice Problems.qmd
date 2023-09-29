@@ -109,7 +109,7 @@ a <- rnorm(1e4, 0.5, 0.25); sum(a<0 | a>1)/length(a)
 m8.5 <- quap(
   alist(
     blooms_std ~ dnorm(mu, sigma),
-    mu <- bw*water_cent + bs*shade_cent + bws*water_cent*shade_cent,
+    mu <- a + bw*water_cent + bs*shade_cent + bws*water_cent*shade_cent,
     a ~ dnorm(0.5, 0.25),
     bw ~ dnorm(0, 0.25),
     bs ~ dnorm(0, 0.25),
@@ -156,13 +156,59 @@ Return to the `data(tulips)` example in the chapter. Now include the `bed` varia
 How do you make a index variable?
 
 ```{r}
-#We'll make a bed dummy called bed_d where 0=a and 1=b, but what to do with c?
-d %>% 
-  mutate(bed_d = case_when(bed=="a" ~ 0,
-                   bed=="b" ~ 1), .after=bed)
+#We'll make a bed into an integer
+d <- d %>% 
+  mutate(bed_id = as.integer(bed), .after=bed)
+```
+
+```{r}
+#Recreate the m8.4 from chapter
+m8.4 <- quap(
+  alist(
+    blooms_std ~ dnorm(mu, sigma),
+    mu <- a + bw*water_cent + bs*shade_cent,
+    a ~ dnorm(0.5, 0.25),
+    bw ~ dnorm(0, 0.25),
+    bs ~ dnorm(0, 0.25),
+    sigma ~ dexp(1)
+  ), data=d
+)
+```
+
+```{r}
+m8h1 <- quap(
+  alist(
+    blooms_std ~ dnorm(mu, sigma),
+    mu <- a[bed_id] + bw*water_cent + bs*shade_cent,
+    a[bed_id] ~ dnorm(0.5, 0.25),
+    bw ~ dnorm(0, 0.25),
+    bs ~ dnorm(0, 0.25),
+    sigma ~ dexp(1)
+  ), data=d
+)
+```
+
+```{r}
+precis(m8h1, depth=2)
+```
+
+```{r}
+precis(m8.4)
+```
+
+```{r}
+precis(m8.5)
 ```
 
 # 8H2
+
+```{r}
+compare(m8h1, m8.4, m8.5, func=WAIC)
+```
+
+```{r}
+plot(compare(m8h1, m8.4, m8.5, func=WAIC))
+```
 
 # 8H3
 
