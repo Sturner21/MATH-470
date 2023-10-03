@@ -11,3 +11,55 @@ library(rethinking)
 ```
 
 # 9E1
+
+Which of the following is a requirement of the simple Metropolis algorithm?
+
+1.  The parameters must be discrete
+2.  The likelihood function must be Gaussian
+3.  Th proposal distribution must be symmetric
+
+1 definitely must be true. 2 I would say not. And 3 is probably not.
+
+# 9E2
+
+Gibbs sampling is more efficient than the Metropolis algorithm. How does it achieve this extra efficiency? Are there any limitations to the Gibbs sampling strategy?
+
+It is more efficient because it uses adaptive proposals from conjugate pairs. It runs into problems because it has a high concentration of measure, meaning it has a had time exploring without going wildly in the wrong direction.
+
+# 9E3
+
+Which sort of parameters can Hamiltonian Monte Carlo not handle? Can you explain why?
+
+The HMC cannot handle discrete parameters, since it must be able to stop anywhere along gradient it travels.
+
+# 9E4
+
+Explain the difference between the effective number of samples, `n_eff` as calculated by Stan, and the actual number of samples.
+
+The effective number of samples is an estimate of the number of independent samples from the posterior distribution, in terms of some estimating some function like the posterior mean. However, since Markov chains are often correlated this will decreased the amount of independent samples. Thus, Stan provides a calculated amount of independent samples depending on the level of autocorrelation.
+
+# 9E5
+
+Which value should `Rhat` approach, when a chain is sampling the posterior distribution correctly?
+
+$\hat{R}$ should approach 1.
+
+# 9E6
+
+Sketch a good trace plot for a Markov chain, one that is effectively sampling from the posterior distribution. What is good about its shape? Then sketch a trace plot for malfunctioning Markov chain. What about its shape indicates malfunction?
+
+A good chain is one that is:
+
+1.  Stationary - The path of the chain says within the same high-probability proportion of the posterior distribution
+2.  Mixing well - Chain rapidly explores the full region
+3.  Converging - Multiple chains stick around the same region of high probability
+
+Violating any of these will result in a bad chain
+
+# 9E7
+
+Repeat the problem above but this time for a trace rank plot.
+
+The trank plot simply reduces the noise of a trace plot into a single line. Therefore the same conditions and looks as described above hold
+
+# 9M1
