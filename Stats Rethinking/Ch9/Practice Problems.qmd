@@ -1,0 +1,13 @@
+---
+title: "Practice Problems"
+format: html
+---
+
+# Load Libraries
+
+```{r}
+library(tidyverse)
+library(rethinking)
+```
+
+# 9E1
