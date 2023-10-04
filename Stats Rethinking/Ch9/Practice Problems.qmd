@@ -116,15 +116,90 @@ m9M1 <- ulam(
 precis(m9M1, depth=2)
 ```
 
+This did not appear to have an effect on `sigma`. My guess would be that there is so much data that this change to a flat prior simply got overridden by the data.
+
 # 9M2
 
 Modify the terrain ruggedness model again. This time, change the prior for `b[cid]` to `dexp(0.3)`. What does this do to the posterior distribution? Can you explain it?
+
+```{r}
+m9M2 <- ulam(
+  alist(
+    log_gdp_std ~ dnorm(mu, sigma),
+    mu <- a[cid] + b[cid]*(rugged_std - 0.215),
+    a[cid] ~ dnorm(1, 0.1),
+    b[cid] ~ dexp(0.3),
+    sigma ~ dunif(0,1)
+  ), data=dat_slim, chains=1
+)
+```
+
+```{r}
+precis(m9M2, depth=2)
+```
+
+This lessened our estimated effect of `b[2]` considerable from -0.14 to 0.02. Meanwhile, almost all other values remained the same. This should mean that our guess for the prior would have a large influence on the output of `b[2]` possibly suggesting the estimates aren't very good for it.
 
 # 9M3
 
 Re-estimate one of the Stan models from the chapter, but at different number of `warmup iterations`. Be sure to use the same number of sampling iterations in each case. Compare the `n_eff` values. How much warm-up is enough?
 
+```{r}
+#Recreate m9.1 but change warmup iterations
+
+m9M3 <- ulam(
+  alist(
+    log_gdp_std ~ dnorm(mu, sigma),
+    mu <- a[cid] + b[cid]*(rugged_std - 0.215),
+    a[cid] ~ dnorm(1, 0.1),
+    b[cid] ~ dnorm(0, 0.3),
+    sigma ~ dexp(1)
+  ), data=dat_slim, chains=1, warmup = 900
+)
+```
+
+```{r}
+precis(m9M3, depth=2)
+```
+
+With 900 warm-ups we start to see that our `n_eff` value drops off sharply. As the textbook explains, we only need about 200 and for the most part our observations are falling around that range so it's not impacting out model too much. However, with much more then we will probably start to see this model begin to deteriorate.
+
+```{r}
+m9M3.2 <- ulam(
+  alist(
+    log_gdp_std ~ dnorm(mu, sigma),
+    mu <- a[cid] + b[cid]*(rugged_std - 0.215),
+    a[cid] ~ dnorm(1, 0.1),
+    b[cid] ~ dnorm(0, 0.3),
+    sigma ~ dexp(1)
+  ), data=dat_slim, chains=1, warmup = 100
+)
+```
+
+```{r}
+precis(m9M3.2, depth=2)
+```
+
+In contrast here we only give the model 100 to warm up. This drastically increases our `n_eff` value and doesn't seem to effect our $\hat{R}$ value much, if at all. Thus, for this model it seems that we could get away with having much less warm-up than the model uses.
+
 # 9H1
+
+Run the model below and then inspect the posterior distribution and explain what it is accomplishing.
+
+```{r}
+#Cell provided for problem
+
+mp <- ulam(
+  alist(
+    a ~ dnorm(0,1),
+    b ~ dcauchy(0,1)
+  ), data=list(y=1), chains=1
+)
+```
+
+```{r}
+precis(mp, depth=2)
+```
 
 # 9H2
 
