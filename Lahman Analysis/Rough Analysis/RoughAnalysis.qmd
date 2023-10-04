@@ -26,6 +26,13 @@ Batting <- Lahman::Batting
 
 The `Batting` data set describes hitting outcomes for each MLB player each year from 1871-present. The explanation of the variable abbreviations is available on page 14 of [this document](https://cran.r-project.org/web/packages/Lahman/Lahman.pdf).
 
+Of course, we don't want to analyze all data from 1871-present since the game has changed considerable since then. So filter to only consider seasons past WW2 (1945). We can always cut down from here, but this will give us a huge sample to use where the rules (nor the game) has changed significantly since.
+
+```{r}
+Modern.Batting <- Batting %>% 
+  filter(yearID > 1945)
+```
+
 ## Load Other Libraries
 
 ```{r}
@@ -35,3 +42,5 @@ library(rethinking)
 ```
 
 # Quap
+
+# Ulam
