@@ -182,9 +182,11 @@ precis(m9M3.2, depth=2)
 
 In contrast here we only give the model 100 to warm up. This drastically increases our `n_eff` value and doesn't seem to effect our $\hat{R}$ value much, if at all. Thus, for this model it seems that we could get away with having much less warm-up than the model uses.
 
-# 9H1
+# 9H1\*
 
 Run the model below and then inspect the posterior distribution and explain what it is accomplishing.
+
+Compare this samples for the parameters `a` and `b`. Can you explain the different trace plots? If you are unfamiliar with Cauchy distribution, you should look it up. The key feature to attend to is that it has no expected value/ Can you connect this fact to the trace plot?
 
 ```{r}
 #Cell provided for problem
@@ -201,6 +203,12 @@ mp <- ulam(
 precis(mp, depth=2)
 ```
 
+```{r}
+traceplot(mp)
+```
+
+I'm not going to lie, I have no idea what this is doing or trying to accomplish. It also does look like for `b` that there is an expected value that it settles to, at least for this run.
+
 # 9H2
 
 # 9H3
@@ -208,6 +216,8 @@ precis(mp, depth=2)
 # 9H4
 
 # 9H5
+
+Modify the Metropolis algorithm code from the chapter to handle the case that the island populations have a different distribution than the island labels. This means that the island's number will not be the same as its population.
 
 # 9H6
 
