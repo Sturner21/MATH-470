@@ -186,7 +186,7 @@ In contrast here we only give the model 100 to warm up. This drastically increas
 
 Run the model below and then inspect the posterior distribution and explain what it is accomplishing.
 
-Compare this samples for the parameters `a` and `b`. Can you explain the different trace plots? If you are unfamiliar with Cauchy distribution, you should look it up. The key feature to attend to is that it has no expected value/ Can you connect this fact to the trace plot?
+Compare this samples for the parameters `a` and `b`. Can you explain the different trace plots? If you are unfamiliar with Cauchy distribution, you should look it up. The key feature to attend to is that it has no expected value. Can you connect this fact to the trace plot?
 
 ```{r}
 #Cell provided for problem

@@ -77,19 +77,30 @@ q1 <- quap(
 precis(q1, depth=2)
 ```
 
+We can see from the `precis` that our `sigma` prior is WAY too small. `precis` tells us its about 40 and we ahve it at 1!
+
 # Ulam
+
+```{r}
+slim <- list(
+  AB = Modern.Teams$AB,
+  HR = Modern.Teams$HR
+)
+
+str(slim)
+```
 
 ```{r}
 u1 <- ulam(
   alist(
     HR ~ dnorm(mu, sigma),
-    mu <- a + b*(AB - mean_AB),
+    mu <- a + b*(AB - 5368),
     #Standard deviation of 20 seems fair to me for home runs in a year
     a ~ dnorm(135, 20),
     #Want to make a very non descriptive prior here since I don't know what the value of b could be
     b ~ dnorm(1, 1),
     sigma ~ dexp(1)
-  ), data = Modern.Teams, chains=1
+  ), data = slim, chains=4, cores = 4
 )
 ```
 
@@ -98,3 +109,11 @@ precis(u1)
 ```
 
 # Comparison
+
+```{r}
+traceplot(u1)
+```
+
+```{r}
+trankplot(u1)
+```
