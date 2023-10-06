@@ -13,15 +13,16 @@ format: html
 #Installing Lahman is easy and simply requires running this code chunk
 
 install.packages("Lahman")
-library(Lahman)
 ```
 
 ## Loading Lahman
 
 ```{r}
 #There are more datasets in Lahman than we care about so we'll select "Batting"
+library(tidyverse)
+library(Lahman)
 
-Batting <- Lahman::Batting
+Teams <- Lahman::Teams
 ```
 
 The `Batting` data set describes hitting outcomes for each MLB player each year from 1871-present. The explanation of the variable abbreviations is available on page 14 of [this document](https://cran.r-project.org/web/packages/Lahman/Lahman.pdf).
@@ -29,18 +30,71 @@ The `Batting` data set describes hitting outcomes for each MLB player each year 
 Of course, we don't want to analyze all data from 1871-present since the game has changed considerable since then. So filter to only consider seasons past WW2 (1945). We can always cut down from here, but this will give us a huge sample to use where the rules (nor the game) has changed significantly since.
 
 ```{r}
-Modern.Batting <- Batting %>% 
+Modern.Teams <- Teams %>% 
   filter(yearID > 1945)
 ```
 
 ## Load Other Libraries
 
 ```{r}
-#Of course we need the other two main libraries
-library(tidyverse)
+#| warning: false
+#Of course we need the other main libraries
 library(rethinking)
 ```
 
+# What are we modeling?
+
+For this project, I want to model how many homeruns a team hits in a season. We know that this should probably be normally distributed and we can derive our expected mean $\mu$ with a little math.
+
+In the more modern game, having a 25HR would probably be considered about average. With 9 guys on the team with some above and some below then we could expect about $9\cdot25=225$. So we would expect teams to hit about 225 homeruns in a year. However, our sample is of teams from 1945 to 2022 which is decidedly not comprised of modern teams. Furthermore, in the "good-ol-days" batting average was stressed much more than power; hence players did not hit as many home runs. Therefore, lets guess that each player averaged about 15HR a season. This would mean we could expect each team to hit $9\cdot15=135$ homeruns each year.
+
+Now with our general guess of the mean we can use a prior. However, this problem is shaping up as one that might lend itself not to a Gaussian prior, but a Poisson one.
+
+Furthermore, we want to model this, not just match distributions. So, I would argue (since we're keeping this simple) that the number of team AB's has a lot to do with how many home runs the team hits. More AB's implies more chances to hit HR's and suggests the team is just better at not getting out overall. So, let's use AB's as our predictor.
+
 # Quap
 
+```{r}
+#Calculate mean AB's now so it's easy to access later
+mean_AB <- mean(Modern.Teams$AB)
+```
+
+```{r}
+q1 <- quap(
+  alist(
+    HR ~ dnorm(mu, sigma),
+    mu <- a + b*(AB - mean_AB),
+    #Standard deviation of 20 seems fair to me for home runs in a year
+    a ~ dnorm(135, 20),
+    #Want to make a very non descriptive prior here since I don't know what the value of b could be
+    b ~ dnorm(1, 1),
+    sigma ~ dexp(1)
+  ), data = Modern.Teams
+)
+```
+
+```{r}
+precis(q1, depth=2)
+```
+
 # Ulam
+
+```{r}
+u1 <- ulam(
+  alist(
+    HR ~ dnorm(mu, sigma),
+    mu <- a + b*(AB - mean_AB),
+    #Standard deviation of 20 seems fair to me for home runs in a year
+    a ~ dnorm(135, 20),
+    #Want to make a very non descriptive prior here since I don't know what the value of b could be
+    b ~ dnorm(1, 1),
+    sigma ~ dexp(1)
+  ), data = Modern.Teams, chains=1
+)
+```
+
+```{r}
+precis(u1)
+```
+
+# Comparison
