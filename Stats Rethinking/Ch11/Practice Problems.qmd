@@ -1,0 +1,35 @@
+---
+title: "Practice Problems"
+format: html
+---
+
+# Load Libraries
+
+```{r}
+library(tidyverse)
+library(rethinking)
+```
+
+# 11E1
+
+# 11E2
+
+# 11E3
+
+# 11E4
+
+# 11M1
+
+# 11M2
+
+# 11M3
+
+# 11M4
+
+# 11H1
+
+# 11H2
+
+# 11H3
+
+# 11H4
