@@ -22,8 +22,6 @@ Batting <- Batting %>%
   mutate(lg = ifelse(lgID=="NL",1,2))
 ```
 
-# Quap
-
 # Ulam
 
 ```{r}
@@ -34,19 +32,93 @@ head(Batting)
 slim <- list(
   AB = Batting$AB,
   HR = Batting$HR,
-  LG = Batting$lg
+  LG = Batting$lg,
+  YEAR = Batting$yearID -1944
 )
 
 str(slim)
 ```
 
 ```{r}
+#Recommended model format from Dr.Parson on 10/6/23
 u1 <- ulam(
   alist(
-    HR ~ binomial(p),
-    logit(p) = ,
+    HR ~ dbinom(AB,p),
+    logit(p) <- a[LG],
+    a[LG] ~ dnorm(0,10)
   ), data=slim, chains=4, cores=4
 )
 ```
 
-# Comparison
+```{r}
+precis(u1, depth=2)
+```
+
+```{r}
+#Since the mode says -3, lets refine the model a little bit
+u2 <- ulam(
+  alist(
+    HR ~ dbinom(AB,p),
+    logit(p) <- a[LG],
+    a[LG] ~ dnorm(0,2)
+  ), data=slim, chains=2, cores=2
+)
+```
+
+```{r}
+precis(u2, depth=2)
+```
+
+These "a" represent the logit probability change in hitting a homerun from each AB. To find this in probability terms, it would be `inv_logit(a[i])`, which becomes about 2%. And when running an LM we get a coefficient of about 0.03. Thus, this result is believable but on the higher end of what I would have expected.
+
+```{r}
+#Let's include year as a parameter on p since I've already assumed it mattered!
+u3 <- ulam(
+  alist(
+    HR ~ dbinom(AB,p),
+    logit(p) <- a[LG] + b[YEAR],
+    a[LG] ~ dnorm(0,2),
+    b[YEAR] ~ dnorm(0,10)
+  ), data=slim, chains=2, cores=2
+)
+```
+
+```{r}
+precis(u3, depth=2)
+```
+
+Is there a way I can extract this and view the walk of `b[i]` as it changes to see how home runs have changed over the years?
+
+```{r}
+trankplot(u3)
+```
+
+# Replicate
+
+The use the following model:
+
+$$
+HR_{i,j}\sim Binom(AB_{i,j}, p_{i,j})\\
+logit(p_{i,j})=\beta_1 Age+\beta_2 Ballpark+\beta_3 Year
+$$
+
+```{r}
+r1 <- ulam(
+  alist(
+    HR ~ dbinom(AB,p),
+    logit(p) <- a[LG],
+    a[LG] ~ dnorm(0,2)
+  ), data=slim, chains=2, cores=2
+)
+```
+
+One question I have here, why only choose one ballpark per player? Why not consider all ballparks the player played at in a season.
+
+I would want to run the following model
+
+$$
+HR_{i,j}\sim Binom(AB_{i,j}, p_{i,j})\\
+logit(p_{i,j})=\beta_1 Age+\beta_2 Ballpark + \beta_3Year+\beta_4SB
+$$
+
+Since stolen bases suggest a different archetype of player. One who's inherent underlying probability of hitting a homerun is lower.
