@@ -12,19 +12,51 @@ library(rethinking)
 
 # 11E1
 
+If an event has probability 0.35, what are the log-odds for this event?
+
 # 11E2
+
+If and event has log-odds 3.2, what is the probability of this event?
 
 # 11E3
 
+Suppose that a coefficient in a logistic regression has a value 1.7. What does this imply about the proportional change in odds of the outcome?
+
 # 11E4
+
+Why do Poisson regressions sometimes require the use of an offset? Provide an example.
 
 # 11M1
 
+As explained in the chapter, binomial data can be organized in aggregated and disaggregated forms, without any impact on inference. But the likelihood of the data does change when the data are converted between the two formats. Can you explain why?
+
 # 11M2
+
+If a coefficient in a Poisson regression has a value of 1.7, what does that imply about the change in the outcome?
 
 # 11M3
 
+Explain why the logit ink is appropriate for a binomial generalized linear model.
+
 # 11M4
+
+Explain why the log link is appropriate for a Poisson generalized linear model.
+
+# 11M5
+
+What would it imply to use a logit link for the mean of a Poisson generalized linear model? Can you think of a scenario for which this would make sense?
+
+# 11M6
+
+State the constraints for which the binomial and Poisson distributions have maximum entropy. Are the constraints different at all for binomial and Poisson? Why or why not?
+
+# 11M7
+
+Use `quap` to construct a quadratic approximate posterior distribution for the chimpanzee model that includes a unique intercept for each actor `m11.4`. Compare the quadratic approximation to the posterior distribution produced instead from MCMC/ Can you explain both the differences and the similarities between the approximate and the MCMC distributions? Relax the prior on the actor intercepts to Normal(0,10). Re-estimate the posterior using both `ulam` and `quap`. Do the differences increase or decrease? Why?
+
+# 11M8
+
+Use `WAIC` or `PSIS` to compare the chimpanzee model that includes a unique intercept for each actor, `m11.4`, to the simpler models fit in the same section. Interpret the results.
 
 # 11H1
 
@@ -33,3 +65,7 @@ library(rethinking)
 # 11H3
 
 # 11H4
+
+# 11H5
+
+# 11H6
