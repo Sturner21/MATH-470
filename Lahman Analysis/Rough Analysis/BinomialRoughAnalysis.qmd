@@ -33,6 +33,7 @@ slim <- list(
   AB = Batting$AB,
   HR = Batting$HR,
   LG = Batting$lg,
+  #Need to subtract by 1944 to make it an index variable instead of a number
   YEAR = Batting$yearID -1944
 )
 
