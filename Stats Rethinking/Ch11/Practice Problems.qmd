@@ -40,21 +40,31 @@ A one unit change in the independent variable results in a 0.85 change in the de
 
 Why do Poisson regressions sometimes require the use of an offset? Provide an example.
 
+Having an offset allows us to analyze the same count variable over different time frames. An example of this in the chapter was when the original monastery was doing so well that the author was considering buying a second one. Both produced books but the original monastery tracked by day while the second tracked by week. Thus, using the offset factor $\tau$, we can compare the two monasteries as if they were recorded at the same rate.
+
 # 11M1
 
 As explained in the chapter, binomial data can be organized in aggregated and disaggregated forms, without any impact on inference. But the likelihood of the data does change when the data are converted between the two formats. Can you explain why?
 
-# 11M2
+Aggregated data will have a larger probability simply because it contains an extra factor in the log-probabilities not present for disaggregated data (339).
+
+# 11M2\*
 
 If a coefficient in a Poisson regression has a value of 1.7, what does that imply about the change in the outcome?
 
-# 11M3
+He never explicitly states coefficient interpretation in 11.2.
 
-Explain why the logit ink is appropriate for a binomial generalized linear model.
+# 11M3\*
 
-# 11M4
+Explain why the logit link is appropriate for a binomial generalized linear model.
+
+Logistic regression makes sense for binomial since in a logistic regression you can only have either a 0 or 1 for the final outcome. Thus modeling a binomial will follow this 0 or 1 trend.
+
+# 11M4\*
 
 Explain why the log link is appropriate for a Poisson generalized linear model.
+
+Possibly because a logarithmic function implies that the growth of the model parameter, this case $\lambda$ (346), will grow exponentially. 
 
 # 11M5
 
@@ -64,15 +74,118 @@ What would it imply to use a logit link for the mean of a Poisson generalized li
 
 State the constraints for which the binomial and Poisson distributions have maximum entropy. Are the constraints different at all for binomial and Poisson? Why or why not?
 
+When priors are flat, then both distributions have flat priors
+
 # 11M7
 
-Use `quap` to construct a quadratic approximate posterior distribution for the chimpanzee model that includes a unique intercept for each actor `m11.4`. Compare the quadratic approximation to the posterior distribution produced instead from MCMC/ Can you explain both the differences and the similarities between the approximate and the MCMC distributions? Relax the prior on the actor intercepts to Normal(0,10). Re-estimate the posterior using both `ulam` and `quap`. Do the differences increase or decrease? Why?
+Use `quap` to construct a quadratic approximate posterior distribution for the chimpanzee model that includes a unique intercept for each actor `m11.4`. Compare the quadratic approximation to the posterior distribution produced instead from MCMC. Can you explain both the differences and the similarities between the approximate and the MCMC distributions? Relax the prior on the actor intercepts to Normal(0,10). Re-estimate the posterior using both `ulam` and `quap`. Do the differences increase or decrease? Why?
 
-# 11M8
+## Prepare m11.4
+
+```{r}
+data(chimpanzees)
+d <- chimpanzees
+d$treatment <- 1+d$prosoc_left + 2*d$condition
+```
+
+```{r}
+dat_list <- list(
+  pulled_left = d$pulled_left,
+  actor = d$actor,
+  treatment = as.integer(d$treatment)
+)
+```
+
+```{r}
+m11.4 <- ulam(
+  alist(
+    pulled_left ~ dbinom(1,p),
+    logit(p) <- a[actor] + b[treatment],
+    a[actor] ~ dnorm(0,1.5),
+    b[treatment] ~ dnorm(0,0.5)
+  ), data=dat_list, chains=4, cores=4, log_lik = TRUE
+)
+```
+
+```{r}
+precis(m11.4, depth=2)
+```
+
+## Part 1
+
+```{r}
+m11.4.2 <- quap(
+  alist(
+    pulled_left ~ dbinom(1,p),
+    logit(p) <- a[actor] + b[treatment],
+    a[actor] ~ dnorm(0,1.5),
+    b[treatment] ~ dnorm(0,0.5)
+  ), data=dat_list
+)
+```
+
+```{r}
+precis(m11.4.2, depth=2)
+```
+
+In general, it appears that the coefficients of "a" generally became lower while the coefficients for "b" became higher.
+
+## Part 2
+
+```{r}
+m11.4.3 <- ulam(
+  alist(
+    pulled_left ~ dbinom(1,p),
+    logit(p) <- a[actor] + b[treatment],
+    a[actor] ~ dnorm(0,10),
+    b[treatment] ~ dnorm(0,0.5)
+  ), data=dat_list, chains=4, cores=4, log_lik = TRUE
+)
+```
+
+```{r}
+precis(m11.4.3, depth=2)
+```
+
+```{r}
+m11.4.4 <- quap(
+  alist(
+    pulled_left ~ dbinom(1,p),
+    logit(p) <- a[actor] + b[treatment],
+    a[actor] ~ dnorm(0,10),
+    b[treatment] ~ dnorm(0,0.5)
+  ), data=dat_list
+)
+```
+
+```{r}
+precis(m11.4.4, depth=2)
+```
+
+This greatly exaggerated the differences seen between the models. However, it seems to affect `quap` more than it did for `ulam`.
+
+# 11H1
 
 Use `WAIC` or `PSIS` to compare the chimpanzee model that includes a unique intercept for each actor, `m11.4`, to the simpler models fit in the same section. Interpret the results.
 
-# 11H1
+```{r}
+#Creat m11.3
+
+m11.3 <- quap(
+  alist(
+    pulled_left ~ dbinom(1,p),
+    logit(p) <- a + b[treatment],
+    a ~ dnorm(0,1.5),
+    b[treatment] ~ dnorm(0,0.5)
+  ), data=dat_list
+)
+```
+
+```{r}
+compare(m11.4, m11.3, func=WAIC)
+```
+
+Obviously, the MCMC model does much better than the `quap` models.
 
 # 11H2
 
@@ -81,5 +194,3 @@ Use `WAIC` or `PSIS` to compare the chimpanzee model that includes a unique inte
 # 11H4
 
 # 11H5
-
-# 11H6

@@ -16,12 +16,37 @@ library(Lahman)
 ```{r}
 Batting <- Lahman::Batting
 
-Batting %>% 
-  filter(yearID >= 1945)
+Batting <- Batting %>% 
+  filter(yearID >= 1945) %>% 
+  select(playerID, yearID, lgID, AB, AB, HR) %>% 
+  mutate(lg = ifelse(lgID=="NL",1,2))
 ```
 
 # Quap
 
 # Ulam
+
+```{r}
+head(Batting)
+```
+
+```{r}
+slim <- list(
+  AB = Batting$AB,
+  HR = Batting$HR,
+  LG = Batting$lg
+)
+
+str(slim)
+```
+
+```{r}
+u1 <- ulam(
+  alist(
+    HR ~ binomial(p),
+    logit(p) = ,
+  ), data=slim, chains=4, cores=4
+)
+```
 
 # Comparison
