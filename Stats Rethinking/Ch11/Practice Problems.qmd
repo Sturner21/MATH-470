@@ -14,13 +14,27 @@ library(rethinking)
 
 If an event has probability 0.35, what are the log-odds for this event?
 
+```{r}
+logit(.35)
+```
+
 # 11E2
 
 If and event has log-odds 3.2, what is the probability of this event?
 
+```{r}
+inv_logit(3.2)
+```
+
 # 11E3
 
 Suppose that a coefficient in a logistic regression has a value 1.7. What does this imply about the proportional change in odds of the outcome?
+
+```{r}
+inv_logit(1.7)
+```
+
+A one unit change in the independent variable results in a 0.85 change in the dependent variable.
 
 # 11E4
 
