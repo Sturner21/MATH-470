@@ -1,0 +1,27 @@
+---
+title: "Binomial Rough Analysis"
+format: html
+---
+
+# Load Libraries
+
+```{r}
+library(tidyverse)
+library(rethinking)
+library(Lahman)
+```
+
+# Clean Lahman
+
+```{r}
+Batting <- Lahman::Batting
+
+Batting %>% 
+  filter(yearID >= 1945)
+```
+
+# Quap
+
+# Ulam
+
+# Comparison
