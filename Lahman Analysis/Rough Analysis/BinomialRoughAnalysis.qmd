@@ -9,6 +9,7 @@ format: html
 library(tidyverse)
 library(rethinking)
 library(Lahman)
+library(scales)
 ```
 
 # Clean Lahman
@@ -20,6 +21,117 @@ Batting <- Batting %>%
   filter(yearID >= 1945) %>% 
   select(playerID, yearID, lgID, AB, AB, HR) %>% 
   mutate(lg = ifelse(lgID=="NL",1,2))
+
+Batting2 <- Batting %>% 
+  filter(yearID >=1973 & yearID <=2021)
+```
+
+# From Meeting
+
+```{r}
+rate <- Batting %>% 
+  group_by(yearID) %>% 
+  summarize(sHR = sum(HR),
+            sAB = sum(AB)) %>% 
+  mutate(p = sHR / sAB,
+         se = sqrt(p*(1-p)/sAB))
+```
+
+```{r}
+ggplot(data=rate)+
+  aes(x=yearID, y=p)+
+  geom_point()+
+  scale_y_continuous(labels=label_percent(), limits = c(0,NA))
+```
+
+```{r}
+#rate2 <- 
+Batting2 %>% 
+  group_by(lgID) %>% 
+  summarize(sHR = sum(HR),
+            sAB = sum(AB)) %>% 
+  mutate(p = sHR / sAB,
+         se = sqrt(p*(1-p)/sAB))
+```
+
+```{r}
+rate2 <- Batting2 %>% 
+  group_by(yearID, lgID) %>% 
+  summarize(sHR = sum(HR),
+            sAB = sum(AB)) %>% 
+  mutate(p = sHR / sAB,
+         se = sqrt(p*(1-p)/sAB)) %>% 
+  select(yearID, lgID, p) %>% 
+  ungroup() %>% 
+  pivot_wider(names_from = lgID, values_from = p) %>% 
+  mutate(diff = AL - NL)
+```
+
+```{r}
+ggplot(data=rate2)+
+  aes(x=yearID, y=diff)+
+  geom_point()
+```
+
+```{r}
+ggplot(data=rate2)+
+  aes(x=diff)+
+  geom_histogram()
+```
+
+```{r}
+Batting3 <-  Batting %>% 
+  group_by(yearID, lgID) %>% 
+  summarize(sAB = sum(AB), sHR = sum(HR)) %>% 
+  mutate(year = yearID-1944,
+         lg = case_when(lgID=="NL" ~ 1,
+                        lgID=="AL" ~ 2))
+```
+
+```{r}
+slim2 <- list(
+  N = nrow(Batting3),
+  z = n_distinct(Batting3$yearID),
+  YEAR = Batting3 %>% pull(year),
+  AB = Batting3 %>% pull(sAB),
+  HR = Batting3 %>% pull(sHR),
+  LG = Batting3 %>% pull(lg)
+)
+
+str(slim2)
+```
+
+# Stan
+
+See Stan file
+
+```{r}
+fit <- stan(
+  file = "RoughBinomAnalysis.stan",
+  data = slim2,
+  chains = 4,
+  warmup = 1000,
+  iter= 5000,
+  cores = 4,
+  refresh=100
+)
+```
+
+```{r}
+plot(fit)
+```
+
+```{r}
+print(fit)
+```
+
+```{r}
+traceplot(fit)
+```
+
+```{r}
+saveRDS(fit, file="fit.rds")
+readRDS("fit.rds")
 ```
 
 # Ulam
