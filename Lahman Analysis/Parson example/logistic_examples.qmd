@@ -1,0 +1,614 @@
+---
+title: "Logistic examples with Stan"
+format: html
+editor: visual
+---
+
+# Introduction
+
+The bulk of this file explores fitting a baseball data set with a Bayesian method. The whole project is rather ridiculous, since there does not seem to be a good reason to fit the model. Simple work with proportions and classical binomial standard errors would be a better way to answer the questions.
+
+Nonetheless, there may be some value in playing around this way. The present situation is simple and thus easy to understand, but it shows some issues that one may encounter in more complicated models.
+
+In our model, we look at home-runs by season pooled by league. We use a binomial model for home runs, with a probability of an at-bat's resulting in a home run depending on the season and the league. The difficulty in fitting the model is that, in classical terms, the parameters are not identifiable: infinitely many sets of parameters give exactly the same probabilities for home runs. In Bayesian statistics, we have the extra tool of the prior, and using priors guided by our expectations about home-run probabilities we can (sort of) identify the parameters.
+
+# Set-up
+
+```{r}
+library(tidyverse)
+library(rstan)
+
+library(Lahman)
+```
+
+It may be worthwhile to learn the `tidybayes` package, which systematizes a lot of graphing and data manipulation that we do when using Stan. It probably does automatically everything that I coded below by hand.
+
+The following chunk has some recommended Stan options:
+
+```{r}
+options(mc.cores = parallel::detectCores())
+rstan_options(auto_write = TRUE)
+```
+
+The `rethinking` package includes an `inv_logit` function as below. It is handy to have around!
+
+```{r}
+inv_logit <- function(p){
+  1 / (1 + exp(-p))
+}
+```
+
+In this analysis of home runs, we focus on the seasons between 1973 and 1996, when only the AL had designated hitters, and when there was no regular interleague play. We fit a binomial-logistic model for home runs (specified further below) with separate constants for each league and for each season. We expect to see a slightly higher probability of home runs in the AL during these seasons.
+
+When fitting the model, we pool the at-bats and home runs among all teams in the same league for each season. Separating the teams makes not difference for the posterior model, since the likelihood is the same whether we work one team at a time or after pooling the teams. Here is the basic calculation:
+
+```         
+p^d1 * (1 - p)^(n1 - d1) * p^d2 * (1 - p) ^ (n2 - d2) =
+p^(d1 + d2) * (1 - p) ^ (n1 + n2 - (d1 + d2))
+```
+
+```{r}
+Teams <- Lahman::Teams
+
+DH.Teams <- Teams %>% 
+  filter(yearID >= 1973 & yearID <= 1996)
+
+DH.summary <- DH.Teams %>%
+  group_by(yearID, lgID) %>%
+  summarize(AB = sum(AB), HR = sum(HR)) %>%
+  mutate(year = yearID - 1972,
+         league = case_when(lgID == "NL" ~ 1,
+                            lgID == "AL" ~ 2))
+```
+
+Here is the model that we will use:
+
+```         
+p, a[1], a[2], b[1], ..., b[24] parameters
+
+for i in 1:24, HR[i] ~ binomial(AB[i], inv_logit(a[league[i]] + b[year[i]]))
+
+a[1] ~ normal(-3.5, 0.1)
+a[2] ~ normal(-3.5, 0.1)
+
+for i in 1:24, b[i] ~ normal(0, 0.1)
+```
+
+The difficulty with the model is that if we shift the `a` parameters by a constant `c` and the `b` parameters by `-c`, we get the same binomial probabilities. In classical statistics, there would be no way to separate (or "identify") the parameters, since the likelihood is constant along these shifts. We can imagine an infinite ridge of maximum likelihood---no way to pick out a single combination of parameter values maximizing the likelihood.
+
+The way to fix this problem in classical statistics is to reduce the number of parameters. Pick a reference level, maybe AL in the first season. Introduce an overall constant for the probability at the reference level, and use 24 comparison parameters for the NL versus AL and for the other seasons versus season 1. Following McElreath's advice (and the advice of some other Bayesians), we will keep what looks like one parameter too many from the classical perspective.
+
+The Bayesian solution to the identification problem is to use priors. The priors that we have specified will help with this problem (but not solve it completely).
+
+The priors require some explanation:
+
+-   We use the league coefficients `a[1]` (NL) and `a[2]` (AL) as the main terms. We know that home runs are rare, maybe around 3% of at-bats. We use `logit(0.03)` or -3.5 for the center of the prior distribution. Then we allow a rather wide range for this overall probability. On the probability, our prior spans from around `inv_logit(-3.7)` (about 0.024) to around `inv_logit(-3.3)` (about 0.036).
+
+-   We think of the season coefficients `b[i]` as adjustments to the overall league average. To help us think about these priors, we recall a bit about odd and logits:
+
+    -   For rare events (small probability `p`) probability `p` and odds `p / (1 - p)` are roughly equal.
+
+    -   An adjustment `b[i]` to `logit(p)` translates to scaling the odds by `exp(b[i])`. For small `b[i]`, this means scaling the odds by a factor of about `1 + b[i]` or by `100b[i]%`. When the probability `p` is small, this means (roughly) scaling the probability by `100b[i]%`.
+
+-   With this in mind, we set prior on the `b[i]` to allow for variations in the HR probability of +/- 20%. Of course, the model will learn from the data! We'll see if the prior is too strong by testing it on some data.
+
+This model would be a good candidate for a *multilevel* treatment. The coefficients `b[i]` come as a batch and might profitably be modeled that way. We can try that too.
+
+# Running the model on fake data
+
+Before we fit the model to our real data set, let's simulate some data (with known parameters) to see how well the model does recovering the known parameters.
+
+In the chunk to simulate data, our `a` values match what we expect from the real data (and the priors of our model). The `b` values, however, have a bit more variability than we put in our priors. We can see what happens!
+
+I had to work a bit to get the column of fake binomial data. My first attempts generated errors, which is why I ended up with `add_column`.
+
+```{r}
+fake_a <- rep(NA, 2)
+fake_a[1] <- -3.6
+fake_a[2] <- -3.5
+fake_b <- rnorm(24, 0, 0.3)
+
+summary_fake <- DH.summary %>%
+  mutate(probs = inv_logit(fake_a[league] + fake_b[year]))
+
+summary_fake <- summary_fake %>%
+  add_column(fake_HR = rbinom(nrow(DH.summary), summary_fake$AB, summary_fake$probs))
+
+test_data <- list(
+  N = nrow(summary_fake),
+  z = n_distinct(summary_fake %>% pull(year)),
+  AB = summary_fake %>% pull(AB),
+  year = summary_fake %>% pull(year),
+  HR = summary_fake %>% pull(fake_HR),
+  league = summary_fake %>% pull(league)
+)
+```
+
+The Stan program `HR1.stan` has the model that I described above.
+
+```{r}
+fake_fit1 <- stan(
+  file = "HR1.stan",
+  data = test_data,
+  chains = 4,
+  warmup = 1000,
+  iter = 5000,
+  cores = 4,
+  refresh = 0
+)
+```
+
+We can look at the posterior distributions for the parameters:
+
+```{r}
+print(fake_fit1)
+```
+
+And at the trace plot:
+
+```{r}
+traceplot(fake_fit1)
+```
+
+We can make graphs of the known parameters and of the fitted values.
+
+```{r}
+post_fake1 <- fake_fit1 %>% (rstan :: extract)
+fake_fit_as <- post_fake1$a %>% as_tibble %>% rename(NL = V1, AL = V2)
+
+fake_as_sum <- fake_fit_as %>%
+  pivot_longer(c(AL, NL), names_to = "league", values_to = "sample") %>%
+  group_by(league) %>% summarize(med = median(sample), low = quantile(sample, probs = 0.025),
+                                 high = quantile(sample, probs = 0.975))
+
+ggplot(data = fake_as_sum) +
+  geom_pointrange(mapping = aes(x = med, y = league, xmin = low, xmax = high)) +
+  geom_point(mapping = aes(x = c(-3.6, -3.5), y = c(2, 1)), color = "red", size = 3)
+```
+
+```{r}
+fake_fit_bs <- post_fake1$b %>% as_tibble
+
+fake_bs_sum <- tibble(coeff = factor(1:24),
+                      true_param = fake_b,
+                      low = rep(NA, 24),
+                      med = rep(NA, 24),
+                      high = rep(NA, 24))
+
+for(i in 1:24){
+  bb <- post_fake1$b[,i]
+  fake_bs_sum$low[i] <- quantile(bb, 0.025)
+  fake_bs_sum$med[i] <- median(bb)
+  fake_bs_sum$high[i] <- quantile(bb, 0.975)
+}
+
+ggplot(data = fake_bs_sum) +
+  geom_pointrange(mapping = aes(x = med, y = coeff, xmin = low, xmax = high)) +
+  geom_point(mapping = aes(x = fake_b, y = coeff), color = "red", size = 3) +
+  scale_x_continuous(breaks = c(-0.75, -0.5, -0.25, 0, 0.25, 0.5, 0.75))
+```
+
+At least in some runs, the model looks overconfident. The true parameter values seem to often to be outside of the ranges of typical samples.
+
+We see from the graphs (which depend on the randomly assigned values for the `b` coefficients) that this model cannot fully separate the `a` and `b` coefficients. Either it underestimates both `a` coefficients and overestimates all `b` coefficients (by the same amount) or vice versa. Nonetheless, it recovers `a + b`, as we see in the following graphs.
+
+Note in the graphs that our model seems to regularize, pulling the estimates toward the center.
+
+```{r}
+fake_NLbs_sum <- tibble(coeff = factor(1:24),
+                      true_param = fake_b,
+                      low = rep(NA, 24),
+                      med = rep(NA, 24),
+                      high = rep(NA, 24))
+
+for(i in 1:24){
+  bb <- post_fake1$a[,1] + post_fake1$b[,i]
+  fake_NLbs_sum$low[i] <- quantile(bb, 0.025)
+  fake_NLbs_sum$med[i] <- median(bb)
+  fake_NLbs_sum$high[i] <- quantile(bb, 0.975)
+}
+
+ggplot(data = fake_NLbs_sum) +
+  geom_pointrange(mapping = aes(x = med, y = coeff, xmin = low, xmax = high)) +
+  geom_point(mapping = aes(x = fake_b - 3.6, y = coeff), color = "red", size = 3) +
+  labs(x = "", y = "season", title = "Fitted middle 95% (black) and true parameter (red)",
+       subtitle = "logit probability of HR for NL at-bats")
+```
+
+```{r}
+fake_ALbs_sum <- tibble(coeff = factor(1:24),
+                      true_param = fake_b,
+                      low = rep(NA, 24),
+                      med = rep(NA, 24),
+                      high = rep(NA, 24))
+
+for(i in 1:24){
+  bb <- post_fake1$a[,2] + post_fake1$b[,i]
+  fake_ALbs_sum$low[i] <- quantile(bb, 0.025)
+  fake_ALbs_sum$med[i] <- median(bb)
+  fake_ALbs_sum$high[i] <- quantile(bb, 0.975)
+}
+
+ggplot(data = fake_ALbs_sum) +
+  geom_pointrange(mapping = aes(x = med, y = coeff, xmin = low, xmax = high)) +
+  geom_point(mapping = aes(x = fake_b - 3.5, y = coeff), color = "red", size = 3) +
+  labs(x = "", y = "season", title = "Fitted middle 95% (black) and true parameter (red)",
+       subtitle = "logit probability of HR for AL at-bats")
+```
+
+One way to understand how the coefficients combine to something more certain is to graph samples for one of the `b` coefficients versus samples for one of the `a` coefficients.
+
+```{r}
+ggplot() +
+  geom_point(mapping = aes(x = post_fake1$a[,1], y = post_fake1$b[,1])) +
+  labs(x = "samples for a[1] (NL)", y = "samples for b[1] (season 1)")
+```
+
+We see a strong correlation, showing the problematic multicolinearity.
+
+The fact that the model recovers well the true `a + b` parameter values means that it will generate predictions similar to the process that generated the original data: only the sums `a + b` in the model appear in the formulas that we would use to generate new data.
+
+Judging from this simulation, we will not take the parameter values for such a model too seriously and we will expect the sort of multicolinearity visible above. But we can trust the model to make reasonable predictions.
+
+## A multilevel model
+
+As a variant, we can use a *multilevel model*, whose structure matches the way that we created our fake data. We model the `b` coefficients as random draws from a single `normal(mu, sigma)` distribution. We use the data to fit the *hyperparameters* (really just more parameters) `mu` and `sigma` as well as the `b` coefficients.
+
+Here is the model:
+
+```         
+p, a[1], a[2], mu, sigma, b[1], ..., b[24] parameters
+
+a[i] ~ normal(-3.5, 0.1)
+
+mu ~ normal(0, 0.1)
+sigma ~ exponential(10)
+
+b[i] ~ normal(mu, sigma)
+
+HR[i] ~ binomial(AB[i], inv_logit(a[league[i]] + b[year[i]]))
+```
+
+The prior for `mu` matches (I think!) our informal reasoning above. This kind of model is harder for Stan to sample.
+
+```{r}
+fit_multilevel_fake <- stan(
+  file = "HR_multi.stan",
+  data = test_data,
+  chains = 4,
+  warmup = 1000,
+  iter = 7000,
+  cores = 4,
+  refresh = 1000
+)
+```
+
+```{r}
+print(fit_multilevel_fake)
+```
+
+Note that `mu` and `sigma` do roughly match the parameters that I used to generate the `b` coefficients.
+
+We can make the same kind of graphs as before. The model fit does not seem better, and the posterior distributions are not as tight. We have the same issues coming from multicolinearity.
+
+```{r}
+post_multi <- fit_multilevel_fake %>% (rstan :: extract)
+fake_multi_as <- post_multi$a %>% as_tibble %>% rename(NL = V1, AL = V2)
+
+fake_multi_as_sum <- fake_multi_as %>%
+  pivot_longer(c(AL, NL), names_to = "league", values_to = "sample") %>%
+  group_by(league) %>% summarize(med = median(sample), low = quantile(sample, probs = 0.025),
+                                 high = quantile(sample, probs = 0.975))
+
+ggplot(data = fake_multi_as_sum) +
+  geom_pointrange(mapping = aes(x = med, y = league, xmin = low, xmax = high)) +
+  geom_point(mapping = aes(x = c(-3.6, -3.5), y = c(2, 1)), color = "red", size = 3)
+```
+
+```{r}
+fake_multi_bs <- post_multi$b %>% as_tibble
+
+fake_multi_bs_sum <- tibble(coeff = factor(1:24),
+                      true_param = fake_b,
+                      low = rep(NA, 24),
+                      med = rep(NA, 24),
+                      high = rep(NA, 24))
+
+for(i in 1:24){
+  bb <- post_multi$b[,i]
+  fake_multi_bs_sum$low[i] <- quantile(bb, 0.025)
+  fake_multi_bs_sum$med[i] <- median(bb)
+  fake_multi_bs_sum$high[i] <- quantile(bb, 0.975)
+}
+
+ggplot(data = fake_multi_bs_sum) +
+  geom_pointrange(mapping = aes(x = med, y = coeff, xmin = low, xmax = high)) +
+  geom_point(mapping = aes(x = fake_b, y = coeff), color = "red", size = 3) +
+  scale_x_continuous(breaks = c(-0.75, -0.5, -0.25, 0, 0.25, 0.5, 0.75))
+```
+
+The following graph shows the multicollinearity that makes it hard to recover individual coefficients. As before, though, we recover the sums `a + b` that contribute directly to observable quantities (numbers of home runs).
+
+```{r}
+ggplot() +
+  geom_point(mapping = aes(x = post_multi$a[,1], y = post_multi$b[,1])) +
+  labs(x = "samples for a[1] (NL)", y = "samples for b[1] (season 1)")
+```
+
+Probably the AL graph is sufficient:
+
+```{r}
+fake_ALbs_msum <- tibble(coeff = factor(1:24),
+                      true_param = fake_b,
+                      low = rep(NA, 24),
+                      med = rep(NA, 24),
+                      high = rep(NA, 24))
+
+for(i in 1:24){
+  bb <- post_multi$a[,2] + post_multi$b[,i]
+  fake_ALbs_msum$low[i] <- quantile(bb, 0.025)
+  fake_ALbs_msum$med[i] <- median(bb)
+  fake_ALbs_msum$high[i] <- quantile(bb, 0.975)
+}
+
+ggplot(data = fake_ALbs_msum) +
+  geom_pointrange(mapping = aes(x = med, y = coeff, xmin = low, xmax = high)) +
+  geom_point(mapping = aes(x = fake_b - 3.5, y = coeff), color = "red", size = 3) +
+  labs(x = "", y = "season", title = "Fitted middle 95% (black) and true parameter (red)",
+       subtitle = "logit probability of HR for AL at-bats")
+```
+
+# Trying the model on the actual data
+
+```{r}
+real_data <- list(
+  N = nrow(DH.summary),
+  z = n_distinct(DH.summary %>% pull(year)),
+  AB = DH.summary %>% pull(AB),
+  year = DH.summary %>% pull(year),
+  HR = DH.summary %>% pull(HR),
+  league = DH.summary %>% pull(league)
+)
+
+fit1 <- stan(
+  file = "HR1.stan",
+  data = real_data,
+  chains = 4,
+  warmup = 1000,
+  iter = 4000,
+  cores = 4,
+  refresh = 1000
+)
+```
+
+```{r}
+print(fit1)
+```
+
+Stan model objects have plot methods. It may even be possible to use these methods to create the kinds of graphs that I made by hand above. (The documentation suggests that one can get ggplot objects from this command and modify them as needed.)
+
+```{r}
+plot(fit1, pars = "a")
+```
+
+```{r}
+plot(fit1, pars = "b")
+```
+
+```{r}
+post1 <- (rstan :: extract)(fit1)
+```
+
+As in our analysis of the fake data, we see strong correlations between the posterior distributions. The multicollinearity limits our ability to estimate individual parameters.
+
+```{r}
+ggplot() +
+  geom_point(mapping = aes(x = post1$a[,1], y = post1$b[,1]))
+```
+
+## The DH effect
+
+Oh, yes! We should look at the average designated-hitter effect in this model. (But see below for how one should actually do this using simpler models.)
+
+```{r}
+ggplot() +
+  geom_histogram(mapping = aes(x = post1$a[,2] - post1$a[,1],
+                               y = ..density..), bins = 50) +
+  labs(x = "posterior difference in logit HR probability (AL - NL)")
+```
+
+Using the principles for interpreting differences on the logit scale mentioned above, we can say that in these seasons where only the AL allowed designated hitters, the home-run probability was about 16% higher (give or take 1 percentage point) for AL.
+
+```{r}
+quantile(post1$a[,2] - post1$a[,1], c(0.025, 0.25, 0.5, 0.75, 0.975)) %>% round(3)
+```
+
+We could be a bit more scientific by calculating the posterior intervals as above, but I don't think it adds much.
+
+Instead of using the approximations to move from differences on the logit scale to ratios of probabilities, we could calculate directly with probabilities, either using differences, as the first histogram, or ratios, as in the second histogram.
+
+```{r}
+ggplot() +
+  geom_histogram(mapping = aes(x = inv_logit(post1$a[,2]) - inv_logit(post1$a[,1]),
+                               y = ..density..), bins = 50) +
+  labs(x = "posterior difference in HR probability (AL - NL)")
+```
+
+```{r}
+ggplot() +
+  geom_histogram(mapping = aes(x = inv_logit(post1$a[,2]) / inv_logit(post1$a[,1]),
+                               y = ..density..), bins = 50) +
+  labs(x = "posterior ratio of HR probability (AL / NL)")
+```
+
+As expected, the histogram for ratios matches closely the histogram for differences on the logit scale. There is a shift of 1 in the horizontal scale, since a difference of x on the logit scale corresponds roughly to scaling the (small) probability by a factor of 1 + x.
+
+## Multilevel model
+
+We can also fit the multilevel model using the real data.
+
+```{r}
+fit_multilevel <- stan(
+  file = "HR_multi.stan",
+  data = real_data,
+  chains = 4,
+  warmup = 1000,
+  iter = 10000,
+  cores = 4,
+  refresh = 1000
+)
+```
+
+```{r}
+print(fit_multilevel)
+```
+
+```{r}
+plot(fit_multilevel, pars = "a")
+```
+
+```{r}
+plot(fit_multilevel, pars = "b")
+```
+
+```{r}
+plot(fit_multilevel, pars = c("mu", "sigma"))
+```
+
+# Enough with all this silliness...
+
+All of that work is rather ridiculous. Let's try some more straightforward things, for which we barely need models.
+
+If our goal is simply to compare AL and NL home-run probabilities during this period, we could pool all the data for the 24 years as follows.
+
+```{r}
+total_pooled <- DH.summary %>% group_by(league) %>%
+  summarize(HR = sum(HR), AB = sum(AB))
+```
+
+Our model is the following:
+
+```         
+p[1], p[2] parameters constrainted to be between 0 and 1.
+
+HR[1] ~ binomial(AB[1], p[1])
+HR[2] ~ binomial(AB[2], p[2])
+```
+
+Because we are just estimating probabilities, we do not need to use the `logit` transformation, though it would not hurt to do so.
+
+Since we have so much data, uniform priors---not necessary to specify in Stan---seem fine. If we wanted to set a prior, we could, say, use a normal distribution centered at 0.03 with standard deviation 0.01 and truncated at 0 and 1. Or we could look up other options such as beta distributions. (Beta distributed random variables have range \[0, 1\]. One can look them up on Wikipedia or in many probability textbooks.)
+
+```{r}
+pooled_data <- list(
+  AB = total_pooled %>% pull(AB),
+  HR = total_pooled %>% pull(HR)
+)
+```
+
+For the following Stan call, I just use the defaults. They work here! It's good to remember that one can make a simple call like this without typing everything. It may actually be possible to remember these two mandatory options...
+
+```{r}
+fit_pooled <- stan(
+  file = 'pooled_model.stan',
+  data = pooled_data
+)
+```
+
+We can summarize the marginal posterior distributions (i.e. separate distributions for the two parameters) in a table with `summary` and with `plot`:
+
+```{r}
+summary(fit_pooled, pars = "p")$summary %>% signif(3)
+```
+
+```{r}
+plot(fit_pooled)
+```
+
+In this case, we can get the same estimates using classical statistical methods. We estimate the probabilities as home-run proportions by league and use binomial standard errors (`sqrt(p (1 - p) / n)`). The numbers are practically the same as what we estimate from our MCMC samples. (We could even get analytic formulas for the priors in this simple situation.) The Bayesians would still advocate (of course) for Bayesian methods, since it is more straightforward to interpret the results.
+
+```{r}
+total_pooled %>% group_by(league) %>%
+  mutate(prop = HR / AB, se = sqrt(prop * (1 - prop) / AB)) %>%
+  select(league, prop, se) %>% signif(3)
+```
+
+We can also use the MCMC samples to summarize the comparison between AL and NL home-run probabilities in our model. The posterior distribution is similar to what we saw before when we compared overall AL and NL home-run probabilities using our more-complex model. Note that the *precision* for this parameter (ratio of probabilities) is no better here than it was in the earlier calculations, even though we can estimate the individual probabilities better. (The posterior distributions of the two probabilities are strongly correlated, and so MCMC samples with high AL probability, for example, also tend to have high NL probability, and so the ratios of the probabilities are more consistent among samples than the individual probabilities.)
+
+```{r}
+post_pooled <- as.data.frame(fit_pooled, pars = "p")
+
+ggplot() +
+  geom_histogram(mapping = aes(x =
+                                 post_pooled %>% pull("p[2]") /
+                                 post_pooled %>% pull("p[1]"),
+                               y = ..density..),
+                 bins = 50) +
+  labs(x = "posterior ratio of HR probability (AL / NL)")
+```
+
+To get a better sense for the difference in home-run probabilities, let's fit a new model with two probability parameters for each season. We'll set up the data as follows:
+
+```{r}
+year_by_year_data <- list(
+  al_ab = DH.summary %>% filter(league == 2) %>% pull(AB),
+  nl_ab = DH.summary %>% filter(league == 1) %>% pull(AB),
+  al_hr = DH.summary %>% filter(league == 2) %>% pull(HR),
+  nl_hr = DH.summary %>% filter(league == 1) %>% pull(HR)
+)
+```
+
+And we fit the model using defaults, which should be fine here.
+
+```{r}
+fit_year_by_year <- stan(
+  file = "year_by_year.stan",
+  data = year_by_year_data
+)
+```
+
+The following (overwhelming) summary describes the fitted model. In the test run that I made, I got many Rhat values less than 1, which is odd. I read, though, on the Stan forum that we should not worry about it.
+
+```{r}
+summary(fit_year_by_year, pars = c("p_al", "p_nl"))$summary %>% round(4)
+```
+
+We can also summarize with Stan's default parameter plots.
+
+```{r}
+plot(fit_year_by_year, pars = "p_nl")
+```
+
+```{r}
+plot(fit_year_by_year, pars = "p_al")
+```
+
+The next chunk calculates posterior samples for the ratio of HR probabilities (AL / NL) year by year and summarize the posteriors using median and quartiles. The following chunk graphs these summary statistics.
+
+```{r}
+post_year_by_year <- (rstan :: extract)(fit_year_by_year)
+
+diffs <- post_year_by_year$p_al / post_year_by_year$p_nl
+
+diffs2 <- as_tibble(diffs) %>%
+  pivot_longer(cols = everything(), names_prefix = "V",
+               names_to = "season") %>%
+  mutate(season = as.integer(season))
+
+mean_diffs <- diffs2 %>% group_by(season) %>%
+  summarize(median = median(value),
+            Q1 = quantile(value, 0.25),
+            Q3 = quantile(value, 0.75))
+```
+
+```{r}
+ggplot(data = mean_diffs) +
+  geom_pointrange(mapping = aes(x = season, y = median, ymin = Q1, ymax = Q3)) +
+  labs(x = "season", y = "ratio of HR probability (AL / NL)")
+```
+
+The year-by-year graph shows an interesting pattern. The ratio of probabilities grew in the first 10 seasons to about 1.35. Te pattern of growth was quite consisten between seasons 4 and season 10. The ration then declined through season 17 and was variable, centered around 1.1, between seasons 17 and 24.
+
+To understand better what is going on, I would expand the analysis, including a few more seasons on either side, marking the start and end of this 24-season period in all my graphs. The context of those earlier seasons could help us interpret the probabilities in this DH period. I am also curious what would happen if we fit a multilevel model here, modeling the home-run probabilities as draws from a common distribution (normal, let's say) whose parameters we fit from the data instead of unrelated quantities. That kind of model could smooth the fit somewhat. Not really sure what to expect.
+
+But I'll stop here for now!
