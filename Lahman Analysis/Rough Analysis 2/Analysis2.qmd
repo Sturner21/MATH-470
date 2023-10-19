@@ -1,0 +1,100 @@
+---
+title: "Analysis2"
+format: html
+---
+
+# Load Libraries
+
+```{r}
+#| warning: false
+library(tidyverse)
+library(rstan)
+library(Lahman)
+```
+
+# Clean Lahman
+
+```{r}
+#| message: false
+
+#Creates a DF called "Batting" which has players stats from 1973-2019
+
+#Load the DF's from Lahman directly
+Batting <- Lahman::Batting
+Teams <- Lahman::Teams
+People <- Lahman::People
+
+Batting <- Batting %>% 
+  #Minimum year = DH was introduced; maximum year = before COVID
+  filter(yearID >= 1973 & yearID <= 2019)
+
+#Filter teams for years considered and select only necessary columns
+Teams <- Teams %>% 
+  filter(yearID>=1973 & yearID <= 2019) %>% 
+  select(yearID, teamID, park)
+
+#Combine current "Batting" and "Teams" DF to associate player with stadium played at
+Batting <- Batting %>% 
+  right_join(Teams, by = join_by(yearID, teamID))
+
+#Add player's age to the "Batting" DF
+Batting <- Batting %>% 
+  right_join(Lahman::People, by = join_by(playerID)) %>% 
+  mutate(Age = yearID - birthYear, .after=yearID) %>%
+  #Don't consider the people who don't have a birthday in the database
+  filter(!is.na(Age))
+
+#Make the lgID variable into an index variable
+Batting <- Batting %>% 
+  mutate(lg = case_when(lgID == "NL" ~ 1,
+                        lgID == "AL" ~ 2), .after=lgID)
+```
+
+```{r}
+#We need to make the data here "slim" like is suggested by McElreath
+slim <- list(
+  N = nrow(Batting),
+  z = n_distinct(Batting %>% pull(yearID)),
+  Year = as.integer(Batting %>% pull(yearID) - 1972),
+  Age = as.integer(Batting %>% pull(Age)-17),
+  LG = as.integer(Batting %>% pull(lg)),
+  AB = Batting %>% pull(AB),
+  HR = Batting %>% pull(HR),
+  SB = Batting %>% pull(SB),
+  BirthYear = as.integer(Batting %>% pull(birthYear)-1922)
+)
+```
+
+# Theoretical Model
+
+The model used by Fellingham & Fisher (2017) is structured as,
+
+$$
+HR_{i,j}|p_{i,j}\sim Binom(AB_{i,j},p_{i,j})\\
+logit(p_{i,j})=x_{i,j}\beta_i+\theta_i+\delta_j+\xi_p
+$$
+
+Where $\theta_i$ is the effect of decade of birth, $\delta_j$ is the effect of season of play, and $\xi_p$ is the effect of home ballpark.
+
+However, I think that this model could be improved and should be structured as,
+
+$$
+HR_{i,j}\sim Binom(AB_{i,j},p_{i,j})\\
+logit(p_{i,j})=\beta_1Age+\beta_2Ballpark+\beta_3Year+\beta_4SB+\beta_5(Age\cdot Year)
+$$
+
+All of these variables should influence the underlying probability of a player to hit a home run. In addition, I think that Age and Year played will have some sort of interaction effect. Possibly not during the small time frame that we consider here, however over a longer study I believe it should.
+
+# Empirical Model
+
+```{r}
+fit1 <- stan(
+  file = "HR21.stan",
+  data = slim,
+  chains = 4,
+  warmup = 1000,
+  iter = 4000,
+  cores = 4,
+  refresh = 1000
+)
+```

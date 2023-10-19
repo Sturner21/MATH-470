@@ -1,0 +1,132 @@
+---
+title: "Clean Lahman"
+format: html
+---
+
+# Load Libraries
+
+```{r}
+#| message: false
+
+library(tidyverse)
+library(Lahman)
+```
+
+# Clean
+
+```{r}
+#| message: false
+
+#Creates a DF called "Batting" which has players stats from 1973-2019
+
+#Load the DF's from Lahman directly
+Batting <- Lahman::Batting
+Teams <- Lahman::Teams
+People <- Lahman::People
+
+Batting <- Batting %>% 
+  #Minimum year = DH was introduced; maximum year = before COVID
+  filter(yearID >= 1973 & yearID <= 2019)
+
+#Filter teams for years considered and select only necessary columns
+Teams <- Teams %>% 
+  filter(yearID>=1973 & yearID <= 2019) %>% 
+  select(yearID, teamID, park)
+
+#Combine current "Batting" and "Teams" DF to associate player with stadium played at
+Batting <- Batting %>% 
+  right_join(Teams, by = join_by(yearID, teamID))
+
+#Add player's age to the "Batting" DF
+Battin <- Batting %>% 
+  right_join(Lahman::People, by = join_by(playerID)) %>% 
+  mutate(Age = yearID - birthYear, .after=yearID) %>%
+  #Don't consider the people who don't have a birthday in the database
+  filter(!is.na(Age))
+```
+
+# Cleaning
+
+```{r}
+Batting <- Lahman::Batting
+
+Batting <- Batting %>% 
+  #Minimum year = DH was introduced; maximum year = before COVID
+  filter(yearID >= 1973 & yearID <= 2019)
+
+Batting
+```
+
+```{r}
+Teams <- Lahman::Teams
+
+Teams <- Teams %>% 
+  filter(yearID>=1973 & yearID <= 2019) %>% 
+  select(yearID, teamID, park)
+```
+
+```{r}
+Batting <- Batting %>% 
+  right_join(Teams, by = join_by(yearID, teamID))
+```
+
+```{r}
+Batting %>% 
+  right_join(Lahman::People, by = join_by(playerID)) %>% 
+  mutate(Age = yearID - birthYear, .after=yearID) %>%
+  #Don't consider the people who don't have a birthday in the database
+  filter(!is.na(Age))
+```
+
+# Dead Ends
+
+```{r}
+#Delets the Wrigley field in LA
+
+Parks <- Lahman::Parks %>% 
+  filter(park.key != "LOS02")
+```
+
+```{r}
+#This does not work. Stupid things like "Fenway II" are in there
+
+#TeamID <- 
+Teams %>% 
+  filter(yearID >= 1973 & yearID <= 2019) %>% 
+  select(yearID, teamID, name, park) %>% 
+  left_join(Parks, by = join_by(park == park.name)) %>% 
+  filter(is.na(state))
+```
+
+```{r}
+#Manually replace the fields so merge with Parks is possible
+Teams <- Lahman::Teams %>% 
+  filter(yearID >= 1973 & yearID <= 2019) %>% 
+  select(yearID, teamID, name, park) %>% 
+  mutate(park = case_when(park=="Fenway Park II" ~ "Fenway Park",
+                          park=="Anaheim Stadium" ~ "Angel Stadium of Anaheim",
+                          park=="Comiskey Park" ~ "Comiskey Park I",
+                          park=="Riverfront Stadium" ~ "Cinergy Field",
+                          park=="Royals Stadium" ~ "Kauffman Stadium",
+                          park=="Jarry Park" ~ "Parc Jarry",
+                          park=="Oakland Coliseum" ~ "Oakland-Alameda County Coliseum",
+                          park=="Jack Murphy Stadium" ~ "Qualcomm Stadium",
+                          park=="Hubert H Humphrey Metrodome" ~ "Hubert H. Humphrey Metrodome",
+                          park=="Exhibition Stadium /Skydome" ~ "Exhibition Stadium",
+                          park=="Skydome" ~ "Rogers Centre",
+                          park=="Comiskey Park II" ~ "Guaranteed Rate Field",
+                          park=="Joe Robbie Stadium" ~ "Sun Life Stadium",
+                          park=="Jacobs Field" ~ "Progressive Field",
+                          park=="The Ballpark at Arlington" ~ "Rangers Ballpark in Arlington",
+                          park=="3Com Park" ~ "Candlestick Park",
+                          .default = park))
+```
+
+```{r}
+Batting %>% 
+  right_join(Lahman::Teams %>% filter(yearID>=1973 & yearID <= 2019) %>% select(yearID, teamID, park), by = join_by(yearID, teamID))
+```
+
+```{r}
+Lahman::People
+```
