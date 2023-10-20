@@ -239,3 +239,60 @@ plot(fit2, pars = "b")
 ```{r}
 plot(fit2, pars = "c")
 ```
+
+```{r}
+data_23 <- list(
+  N = nrow(Batting),
+  n_year = n_distinct(Batting$yearID),
+  AB = Batting %>% pull(AB),
+  HR = Batting %>% pull(HR),
+  Year = Batting %>% pull(yearID) - 1972,
+  Age = Batting %>% pull(Age) - 30
+)
+```
+
+```{r}
+fit_23 <- stan(
+  file = "HR23.stan",
+  data = data_23
+)
+```
+```{r}
+summary(fit_23)$summary %>% signif(3)
+```
+
+```{r}
+plot(fit_23, pars = "b")
+```
+
+```{r}
+saveRDS(fit_23, "HR23_new.rds")
+```
+
+```{r}
+traceplot(fit_23)
+```
+
+
+```{r}
+sum_2001 <- Batting %>% filter(yearID == 2001) %>% group_by(Age) %>%
+  summarize(HR = sum(HR), AB = sum(AB)) %>% mutate(prop = HR / AB)
+```
+
+```{r}
+post_sample <- as.data.frame(fit_23, pars = c("b[29]", "beta1")) %>% slice_sample(n = 10) 
+
+ggplot(data = sum_2001) + 
+  geom_point(mapping = aes(x = Age - 30, y = logit(prop))) +
+  geom_abline(slope = post_sample$beta1, intercept = post_sample$"b[29]")
+```
+Try a new version of the model:
+
+```{r}
+sum_all_years <- Batting %>% group_by(yearID, Age) %>%
+  summarize(HR = sum(HR), AB = sum(AB))
+```
+
+Fit a model first with varying intercepts (different intercept for each year) but constant slope.
+
+Start with just 200 iterations to see if the model works at all.
