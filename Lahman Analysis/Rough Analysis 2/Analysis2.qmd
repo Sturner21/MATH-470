@@ -12,6 +12,12 @@ library(rstan)
 library(Lahman)
 ```
 
+```{r}
+options(mc.cores = parallel::detectCores())
+rstan_options(auto_write = TRUE)
+```
+
+
 # Clean Lahman
 
 ```{r}
@@ -42,7 +48,7 @@ Batting <- Batting %>%
   right_join(Lahman::People, by = join_by(playerID)) %>% 
   mutate(Age = yearID - birthYear, .after=yearID) %>%
   #Don't consider the people who don't have a birthday in the database
-  filter(!is.na(Age))
+  drop_na(Age)
 
 #Make the lgID variable into an index variable
 Batting <- Batting %>% 
@@ -65,6 +71,14 @@ slim <- list(
 )
 ```
 
+```{r}
+#Define logit for convenience
+
+inv_logit <- function(p){
+  1 / (1 + exp(-p))
+}
+```
+
 # Theoretical Model
 
 The model used by Fellingham & Fisher (2017) is structured as,
@@ -85,6 +99,63 @@ $$
 
 All of these variables should influence the underlying probability of a player to hit a home run. In addition, I think that Age and Year played will have some sort of interaction effect. Possibly not during the small time frame that we consider here, however over a longer study I believe it should.
 
+# Graphical exploration
+
+Before building a model, we explore the data by graphing the home-run proportion with classical binomial standard errors.
+
+```{r}
+Batting_summary <- Batting %>% group_by(Age) %>%
+  summarize(HR = sum(HR), AB = sum(AB)) %>%
+  mutate(prop = HR / AB, se = sqrt(prop*(1-prop)/AB))
+
+ggplot(data = Batting_summary) +
+  geom_pointrange(mapping = aes(x = Age, y = prop, ymin = prop - se,
+                                ymax = prop + se))
+```
+Let's graph again, restricting to players aged 20 to 40.
+
+```{r}
+ggplot(data = Batting_summary %>% filter(Age >= 20 & Age <= 40)) +
+  geom_pointrange(mapping = aes(x = Age, y = prop, ymin = prop - se,
+                                ymax = prop + se))
+```
+Our first model will include a linear term for age and will be restricted to this age range.
+
+# Simple model
+
+```{r}
+Batting_summary_restricted <- Batting_summary %>%
+  filter(Age >= 20 & Age <= 40) %>% mutate(c.Age = Age - 30)
+
+simple_data <-   list(
+  N = nrow(Batting_summary_restricted),
+  Age = Batting_summary_restricted %>% pull(c.Age),
+  AB = Batting_summary_restricted %>% pull(AB),
+  HR = Batting_summary_restricted %>% pull(HR)
+)
+```
+
+
+```{r}
+glm(cbind(HR, AB - HR) ~ c.Age, data = Batting_summary_restricted, family = binomial)
+```
+
+
+```{r}
+fit_simple <- stan(
+  file = "HR2_simple.stan",
+  data = simple_data
+)
+```
+
+```{r}
+summary(fit_simple, pars = c("beta0", "beta1"))$summary %>% signif(3)
+```
+```{r}
+plot(fit_simple, pars = c("beta0", "beta1"))
+```
+
+
 # Empirical Model
 
 ```{r}
@@ -93,8 +164,40 @@ fit1 <- stan(
   data = slim,
   chains = 4,
   warmup = 1000,
-  iter = 4000,
+  iter = 1000,
   cores = 4,
   refresh = 1000
 )
+```
+
+```{r}
+plot(fit1, pars = "a")
+```
+
+```{r}
+plot(fit1, pars = "b")
+```
+
+```{r}
+fit2 <- stan(
+  file = "HR22.stan",
+  data = slim,
+  chains = 1,
+  warmup = 1000,
+  iter = 4000,
+  cores = 1,
+  refresh = 1000
+)
+```
+
+```{r}
+plot(fit2, pars = "a")
+```
+
+```{r}
+plot(fit2, pars = "b")
+```
+
+```{r}
+plot(fit2, pars = "c")
 ```
