@@ -135,11 +135,30 @@ simple_data <-   list(
 )
 ```
 
+We start with a frequentist fit using maximum likelihood.
 
 ```{r}
 glm(cbind(HR, AB - HR) ~ c.Age, data = Batting_summary_restricted, family = binomial)
 ```
+And now let's fit using the following simple model:
 
+```
+data:
+N = number of ages (21 between 20 and 40)
+AB = at-bats, pooled for each age
+HR = home runs, pooled for each age
+Age = age, recentered at 30 for easier interpretation of intercept
+
+parameters:
+beta0 (intercept for logistic model)
+beta1 (slope for logistic model)
+
+model:
+
+For n in 1:N,
+
+HR[n] ~ binomial(AB[n], inv_logit(beta0 + beta1 * Age[n]))
+```
 
 ```{r}
 fit_simple <- stan(
@@ -148,11 +167,30 @@ fit_simple <- stan(
 )
 ```
 
+The fitted parameters match the frequentist maximum likelihood parameters. (But there now no mystery about the meaning of the standard errors.)
+
 ```{r}
 summary(fit_simple, pars = c("beta0", "beta1"))$summary %>% signif(3)
 ```
+
+We can make a plot of the parameters, but there is not much to see, since we can estimate the parameters quite precisely thanks to the huge data set.
+
 ```{r}
 plot(fit_simple, pars = c("beta0", "beta1"))
+```
+
+We can get a sense for the fitted model by sampling from the posterior. We take 10 random rows and plot the model lines with the empirical logits of the proportions. Yuck! This model does not fit the data well at all. Room for improvement! (Quadratic model... Splines...)
+
+```{r}
+logit <- function(p) log( p / (1 - p))
+
+post_simple <- as.data.frame(fit_simple) %>% select(beta0, beta1) %>%
+  slice_sample(n = 10)
+
+ggplot(data = Batting_summary_restricted) +
+  geom_point(mapping = aes(x = c.Age, y = logit(prop))) +
+  geom_abline(slope = post_simple$beta1, intercept = post_simple$beta0,
+              alpha = 0.3)
 ```
 
 
