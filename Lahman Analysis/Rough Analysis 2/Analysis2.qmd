@@ -65,6 +65,14 @@ slim <- list(
 )
 ```
 
+```{r}
+#Define logit for convenience
+
+inv_logit <- function(p){
+  1 / (1 + exp(-p))
+}
+```
+
 # Theoretical Model
 
 The model used by Fellingham & Fisher (2017) is structured as,
@@ -93,8 +101,40 @@ fit1 <- stan(
   data = slim,
   chains = 4,
   warmup = 1000,
-  iter = 4000,
+  iter = 1000,
   cores = 4,
   refresh = 1000
 )
+```
+
+```{r}
+plot(fit1, pars = "a")
+```
+
+```{r}
+plot(fit1, pars = "b")
+```
+
+```{r}
+fit2 <- stan(
+  file = "HR22.stan",
+  data = slim,
+  chains = 1,
+  warmup = 1000,
+  iter = 4000,
+  cores = 1,
+  refresh = 1000
+)
+```
+
+```{r}
+plot(fit2, pars = "a")
+```
+
+```{r}
+plot(fit2, pars = "b")
+```
+
+```{r}
+plot(fit2, pars = "c")
 ```

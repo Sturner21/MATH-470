@@ -24,17 +24,20 @@ data {
 parameters {
   vector[2] a;
   vector[z] b;
+  vector[z] c;
 }
 
 model {
   for (n in 1:N){
-    HR[n] ~ binomial_logit(AB[n], a[LG[n]] + b[Year[n]]);
+    HR[n] ~ binomial_logit(AB[n], a[LG[n]] + b[Year[n]] + c[Age[n]]);
   }
   a[1] ~ normal(-3.5, 0.1);
   a[2] ~ normal(-3.5, 0.1);
   for (n in 1:z){
     b[n] ~ normal(0, 0.1);
+    c[n] ~ normal(0, 0.5);
   }
+
 }
 
 
