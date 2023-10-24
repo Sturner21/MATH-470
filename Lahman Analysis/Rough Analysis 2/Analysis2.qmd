@@ -17,7 +17,6 @@ options(mc.cores = parallel::detectCores())
 rstan_options(auto_write = TRUE)
 ```
 
-
 # Clean Lahman
 
 ```{r}
@@ -79,6 +78,15 @@ inv_logit <- function(p){
 }
 ```
 
+```{r}
+#Create the summarized data frame
+
+Sum.Batting <- Batting %>% 
+  group_by(yearID, Age) %>% 
+  summarize(AB = sum(AB),
+            HR = sum(HR))
+```
+
 # Theoretical Model
 
 The model used by Fellingham & Fisher (2017) is structured as,
@@ -112,6 +120,7 @@ ggplot(data = Batting_summary) +
   geom_pointrange(mapping = aes(x = Age, y = prop, ymin = prop - se,
                                 ymax = prop + se))
 ```
+
 Let's graph again, restricting to players aged 20 to 40.
 
 ```{r}
@@ -119,6 +128,7 @@ ggplot(data = Batting_summary %>% filter(Age >= 20 & Age <= 40)) +
   geom_pointrange(mapping = aes(x = Age, y = prop, ymin = prop - se,
                                 ymax = prop + se))
 ```
+
 Our first model will include a linear term for age and will be restricted to this age range.
 
 # Simple model
@@ -140,9 +150,10 @@ We start with a frequentist fit using maximum likelihood.
 ```{r}
 glm(cbind(HR, AB - HR) ~ c.Age, data = Batting_summary_restricted, family = binomial)
 ```
+
 And now let's fit using the following simple model:
 
-```
+```         
 data:
 N = number of ages (21 between 20 and 40)
 AB = at-bats, pooled for each age
@@ -192,7 +203,6 @@ ggplot(data = Batting_summary_restricted) +
   geom_abline(slope = post_simple$beta1, intercept = post_simple$beta0,
               alpha = 0.3)
 ```
-
 
 # Empirical Model
 
@@ -257,6 +267,7 @@ fit_23 <- stan(
   data = data_23
 )
 ```
+
 ```{r}
 summary(fit_23)$summary %>% signif(3)
 ```
@@ -273,7 +284,6 @@ saveRDS(fit_23, "HR23_new.rds")
 traceplot(fit_23)
 ```
 
-
 ```{r}
 sum_2001 <- Batting %>% filter(yearID == 2001) %>% group_by(Age) %>%
   summarize(HR = sum(HR), AB = sum(AB)) %>% mutate(prop = HR / AB)
@@ -286,13 +296,62 @@ ggplot(data = sum_2001) +
   geom_point(mapping = aes(x = Age - 30, y = logit(prop))) +
   geom_abline(slope = post_sample$beta1, intercept = post_sample$"b[29]")
 ```
+
 Try a new version of the model:
 
 ```{r}
 sum_all_years <- Batting %>% group_by(yearID, Age) %>%
-  summarize(HR = sum(HR), AB = sum(AB))
+  summarize(HR = sum(HR), AB = sum(AB), SB = sum(SB))
 ```
 
 Fit a model first with varying intercepts (different intercept for each year) but constant slope.
 
 Start with just 200 iterations to see if the model works at all.
+
+```{r}
+data23b <- list(
+  N = nrow(sum_all_years),
+  n_year = n_distinct(sum_all_years$yearID),
+  AB = sum_all_years %>% pull(AB),
+  HR = sum_all_years %>% pull(HR),
+  Year = sum_all_years %>% pull(yearID) -1972,
+  Age = sum_all_years %>% pull(Age) -30
+)
+```
+
+```{r}
+#I find that 500 works and 200 doesn't
+fit23b <- stan(
+  file = "HR23b.stan",
+  data = data23b,
+  iter = 500
+)
+```
+
+```{r}
+summary(fit23b)$summary %>% signif(3)
+```
+
+Fitting the model but with SB's considered as a proxy or player archetype
+
+```{r}
+data24 <- list(
+  N = nrow(sum_all_years),
+  n_year = n_distinct(sum_all_years$yearID),
+  AB = sum_all_years %>% pull(AB),
+  HR = sum_all_years %>% pull(HR),
+  Year = sum_all_years %>% pull(yearID) -1972,
+  Age = sum_all_years %>% pull(Age) -30,
+  SB = sum_all_years %>% pull(SB)
+)
+```
+
+```{r}
+fit23b <- stan(
+  file = "HR24.stan",
+  data = data24,
+  iter = 500
+)
+```
+
+Iterating using both 500 and 1000 loops leaves an error. Suggesting that using SB probably is not a good idea. Or at least we should talk about it more before implementation.
