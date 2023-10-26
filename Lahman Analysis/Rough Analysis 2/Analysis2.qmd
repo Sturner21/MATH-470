@@ -332,7 +332,40 @@ fit23b <- stan(
 summary(fit23b)$summary %>% signif(3)
 ```
 
-Fitting the model but with SB's considered as a proxy or player archetype
+We should try to see if we can implement player archetype into the model. We can use SB to represent players archetype. Basically, we have the big slugger who doesn't steal bags and the skinny fast player who does steal bags.
+
+```{r}
+no_age_sum_all_years <- sum_all_years %>% 
+  group_by(yearID) %>% 
+  summarize(HR = sum(HR),
+            AB = sum(AB),
+            SB = sum(SB)) %>% 
+  mutate(p = HR / AB)
+```
+
+```{r}
+#Lets check graphically
+
+ggplot(data=no_age_sum_all_years)+
+  aes(x=SB, y=HR)+
+  geom_point()
+```
+
+When ignoring age, we can see a general downward trend for HR proportion and age over the time series we are considering.
+
+```{r}
+ggplot(data = no_age_sum_all_years)+
+  aes(x=yearID, y=p)+
+  geom_line()
+```
+
+```{r}
+ggplot(data=no_age_sum_all_years)+
+  aes(x=yearID, y=SB)+
+  geom_line()
+```
+
+This confirms my hypothesis that players are starting to hit home runs with more frequency at the trade off of stolen bases. Those who remain stealing bags are may not be hitting home runs and thus we should at least try adding SB's into the model to see how it does.
 
 ```{r}
 data24 <- list(
@@ -355,3 +388,59 @@ fit23b <- stan(
 ```
 
 Iterating using both 500 and 1000 loops leaves an error. Suggesting that using SB probably is not a good idea. Or at least we should talk about it more before implementation.
+
+## Multilevel Model
+
+Maybe we can start with the model we used in "HR23.stan,"
+
+$$
+HR\sim Binom(AB,p)\\
+p=b(Year)+\beta_1Age\\
+b\sim Normal(-3.5,0.1)\\
+\beta_1\sim Normal(0,1)
+$$
+
+And change it to something like
+
+$$
+HR\sim Binom(AB,p)\\
+p=b(Year)+\beta_1Age\\
+b\sim Normal(\bar{b},\sigma_b)\\
+\bar{b}\sim Normal(-3.5,0.1)\\
+\sigma_b\sim Exp(1)\\
+\beta_1\sim Normal(0,1)
+$$
+
+This mirrors the differences in the models used on pages 402-403.
+
+```{r}
+#We don't need to import any more data than is already present in HR23 so we can use that dataset again.
+
+#After running the first time (which didn't take long. Yay!) it suggested that I should run some more iterations so I'll up it to 1000
+
+fit25 <- stan(
+  file = "HR25.stan",
+  data = data23b,
+  iter = 1000
+)
+```
+
+Doing 1000 iterations removed any problems I had with the model, and I believe that I was able to accurately do the (simple) multilevel model.
+
+```{r}
+summary(fit25)$summary %>% signif(3)
+```
+
+```{r}
+plot(fit25, pars = "b")
+```
+
+```{r}
+traceplot(fit25)
+```
+
+```{r}
+saveRDS(fit25, "HR25.rds")
+```
+
+Not sure that I did this right so I'm going to leave it here for now.
