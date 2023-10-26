@@ -87,6 +87,17 @@ Sum.Batting <- Batting %>%
             HR = sum(HR))
 ```
 
+```{r}
+#Create a column which described the decade a player was born in
+
+Batting %>% 
+  #Put the birth year down to the decade value. (i.e. 1936 becomes 193.6)
+  #Then force it to be an integer. R doesn't round so we are left with (1936=193) a decade
+  mutate(birthDecade = as.integer(birthYear/10), .before=birthYear) %>% 
+  #Then, index it by making the minimum year equal to 1
+  mutate(birthDecade = birthDecade - min(birthDecade) + 1)
+```
+
 # Theoretical Model
 
 The model used by Fellingham & Fisher (2017) is structured as,
