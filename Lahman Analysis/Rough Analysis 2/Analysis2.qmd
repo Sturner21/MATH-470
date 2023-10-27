@@ -378,6 +378,7 @@ ggplot(data=no_age_sum_all_years)+
 
 This confirms my hypothesis that players are starting to hit home runs with more frequency at the trade off of stolen bases. Those who remain stealing bags are may not be hitting home runs and thus we should at least try adding SB's into the model to see how it does.
 
+
 ```{r}
 data24 <- list(
   N = nrow(sum_all_years),
@@ -391,14 +392,72 @@ data24 <- list(
 ```
 
 ```{r}
-fit23b <- stan(
+fit24 <- stan(
   file = "HR24.stan",
   data = data24,
-  iter = 500
+  iter = 2000
 )
 ```
 
 Iterating using both 500 and 1000 loops leaves an error. Suggesting that using SB probably is not a good idea. Or at least we should talk about it more before implementation.
+
+```{r}
+summary(fit24)$summary
+```
+```{r}
+plot(fit24, pars = c("beta1", "c"))
+```
+
+
+### Another try with SB
+
+Let's try a new version of the model above that separates players by SB as well as age.
+
+```{r}
+sum_all_years_SB <- Batting %>% group_by(yearID, Age, SB) %>%
+  summarize(HR = sum(HR), AB = sum(AB))
+```
+
+```{r}
+data24b <- list(
+  N = nrow(sum_all_years_SB),
+  n_year = n_distinct(sum_all_years_SB$yearID),
+  AB = sum_all_years_SB %>% pull(AB),
+  HR = sum_all_years_SB %>% pull(HR),
+  Year = sum_all_years_SB %>% pull(yearID) -1972,
+  Age = sum_all_years_SB %>% pull(Age) -30,
+  SB = sum_all_years_SB %>% pull(SB)
+)
+```
+
+```{r}
+fit24b <- stan(
+  file = "HR24b.stan",
+  data = data24b,
+  iter = 500
+)
+```
+```{r}
+print(fit24b)
+```
+```{r}
+plot(fit24b, pars = "b")
+```
+```{r}
+plot(fit24b, pars = c("beta1", "c"))
+```
+
+```{r}
+Batting_summary_SB <- Batting %>% group_by(SB) %>%
+  summarize(HR = sum(HR), AB = sum(AB)) %>%
+  mutate(prop = HR / AB, se = sqrt(prop*(1-prop)/AB))
+
+ggplot(data = Batting_summary_SB) +
+  geom_pointrange(mapping = aes(x = SB, y = prop, ymin = prop - se,
+                                ymax = prop + se))
+```
+
+
 
 ## Multilevel Model
 
