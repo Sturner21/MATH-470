@@ -9,6 +9,7 @@ format: html
 #| warning: false
 library(tidyverse)
 library(rstan)
+library(bayesplot)
 library(Lahman)
 ```
 
@@ -411,11 +412,32 @@ plot(fit24, pars = c("beta1", "c"))
 
 ### Another try with SB
 
-Let's try a new version of the model above that separates players by SB as well as age.
+Let's try a new version of the model above that separates players by SB as well as age. Before we do anything, we can look at home-run proportions when we group player seasons (cases in our data set) by the number of stolen bases. We first graph the proportions.
+
+```{r}
+Batting_summary_SB <- Batting %>% group_by(SB) %>%
+  summarize(HR = sum(HR), AB = sum(AB)) %>%
+  mutate(prop = HR / AB, se = sqrt(prop*(1-prop)/AB))
+
+ggplot(data = Batting_summary_SB) +
+  geom_pointrange(mapping = aes(x = SB, y = prop, ymin = prop - se,
+                                ymax = prop + se))
+```
+We can graph again on the logit scale, focusing on cases where the number of stolen bases is less than 50. The association looks plausibly linear, suggesting that a logit-binomial model may be reasonable.
+
+```{r}
+logit <- function(p){log(p / (1 - p))}
+
+ggplot(data = Batting_summary_SB %>% filter(SB < 50)) +
+  geom_pointrange(mapping = aes(x = SB, y = logit(prop), ymin = logit(prop - se),
+                                ymax = logit(prop + se))) +
+  geom_smooth(method = "lm", mapping = aes(x = SB, y = logit(prop)))
+```
+To prepare to fit the model, we summarize the data, grouping player-seasons by year, player age, and number of stolen bases. (As in other examples, this grouping will not affect the likelihood, and it seems to speed up the work of Stan considerably.)
 
 ```{r}
 sum_all_years_SB <- Batting %>% group_by(yearID, Age, SB) %>%
-  summarize(HR = sum(HR), AB = sum(AB))
+  summarize(HR = sum(HR), AB = sum(AB)) %>% ungroup
 ```
 
 ```{r}
@@ -430,6 +452,35 @@ data24b <- list(
 )
 ```
 
+Before we fit the model, we can simulate data from the prior distributions. We just generate one simulated data set, since there is plenty of internal replication in the data set.
+
+```{r}
+prior24b <- stan(
+  file = "HR24b_prior_sim.stan",
+  data = data24b,
+  algorithm = "Fixed_param",
+  iter = 1,
+  chains = 1
+)
+```
+To get an overall sense for the simulated data, we look at simulated home-run proportions in the groups of players (by year, age, and stolen bases).
+
+```{r}
+HR_sim <- (rstan :: extract)(prior24b)$HR[1,]
+
+sum_all_years_SB <- sum_all_years_SB %>% mutate(HR_sim = HR_sim,
+                                                prop_sim = HR_sim / AB)
+```
+
+```{r}
+ggplot(data = sum_all_years_SB) +
+  geom_histogram(mapping = aes(x = prop_sim))
+```
+
+Huh! The Bayesians warn us about this phenomenon. (See Bayesian Workflow, Section 2.4 and Figure 3.) Weak independent priors on large numbers of parameters add up to something strong. The home-run proportions are either near 0% or 100%. If we did not have a lot of data to fit the model, we would have to use stronger priors to get something reasonable here. In our case, there is so much data that the prior distributions do not matter much (at least for this model).
+
+The next chunk fits the model.
+
 ```{r}
 fit24b <- stan(
   file = "HR24b.stan",
@@ -437,26 +488,40 @@ fit24b <- stan(
   iter = 500
 )
 ```
+
+We have another version of the model that also generates replications.
+
+(Here is an RStan demo with some inspirational code: [http://avehtari.github.io/BDA_R_demos/demos_rstan/ppc/poisson-ppc.html])
+
 ```{r}
-print(fit24b)
-```
-```{r}
-plot(fit24b, pars = "b")
-```
-```{r}
-plot(fit24b, pars = c("beta1", "c"))
+fit24b_reps <- stan(
+  file = "HR24b_reps.stan",
+  data = data24b,
+  iter = 500
+)
 ```
 
 ```{r}
-Batting_summary_SB <- Batting %>% group_by(SB) %>%
-  summarize(HR = sum(HR), AB = sum(AB)) %>%
-  mutate(prop = HR / AB, se = sqrt(prop*(1-prop)/AB))
+HR_rep <- as.matrix(fit24b_reps, pars = "HR_rep")
 
-ggplot(data = Batting_summary_SB) +
-  geom_pointrange(mapping = aes(x = SB, y = prop, ymin = prop - se,
-                                ymax = prop + se))
+dim(HR_rep)
 ```
 
+
+```{r}
+ppc_hist(sum_all_years_SB %>% pull(HR), HR_rep[1:8, ], binwidth = 1)
+```
+
+Yuck... A poor fit. The model doesn't reproduce low numbers of home runs as we see in the original data set.
+
+```{r}
+ppc_dens_overlay(sum_all_years_SB %>% pull(HR), HR_rep[1:50, ])
+```
+This family of density plots shows the same thing. A basic check of the model (histogram of home-run counts in our groups) shows a mismatch.
+
+The situation reminds me of the pictures in Section 26.2 of the Stan User's Guide [https://mc-stan.org/docs/2_26/stan-users-guide/plotting-multiples.html]. In that section, the authors show an overdispersed count variable (negative binomial) fit with a binomial model. There is more on the same example in Section 26.3, using a test statistic and the p-value idea to quantify the poor fit.
+
+Perhaps I will add more here, trying some better posterior plots from the bayesplot package. See, for example, this page [https://mc-stan.org/bayesplot/reference/PPC-errors.html], which shows how to make the kind of binned-residual graphs for binomial models that we used in MATH 313.
 
 
 ## Multilevel Model
