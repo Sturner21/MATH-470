@@ -433,11 +433,54 @@ ggplot(data = Batting_summary_SB %>% filter(SB < 50)) +
                                 ymax = logit(prop + se))) +
   geom_smooth(method = "lm", mapping = aes(x = SB, y = logit(prop)))
 ```
+Since we will use both stolen bases and age in the model, we can make the same sort of graph after grouping players by age. Let's look first at the distribution of age.
+
+```{r}
+ggplot(data = Batting) +
+  geom_histogram(mapping = aes(x = Age), binwidth = 1)
+```
+(What a lovely histogram!)
+
+We will split players into three roughly equally sized age groups, determined by quantiles.
+
+```{r}
+Batting %>% summarize(quantile(Age, 0.33), quantile(Age, 0.67))
+```
+Our three groups are "26 or younger", "27 to 30", and "over 30".
+
+```{r}
+Batting <- Batting %>% mutate(age_group = case_when(
+  Age <= 26 ~ "young",
+  Age <= 30 ~ "middle",
+  Age > 30 ~ "old"
+))
+```
+
+We repeat our graphical exploration, faceting by age group. The general pattern (negative association between SB and home-run probability) persists across age groups. We note, though, that the pattern looks a bit different for the youngest players
+
+```{r}
+Batting_summary_age_SB <- Batting %>% group_by(age_group, SB) %>%
+  summarize(HR = sum(HR), AB = sum(AB)) %>%
+  mutate(prop = HR / AB, se = sqrt(prop*(1-prop)/AB))
+
+ggplot(data = Batting_summary_age_SB) +
+  geom_pointrange(mapping = aes(x = SB, y = prop, ymin = prop - se,
+                                ymax = prop + se)) +
+  facet_wrap(~age_group)
+```
+
+```{r}
+ggplot(data = Batting_summary_age_SB) +
+  geom_pointrange(mapping = aes(x = SB, y = logit(prop), ymin = prop - se,
+                                ymax = prop + se)) +
+  facet_wrap(~age_group)
+```
+
 To prepare to fit the model, we summarize the data, grouping player-seasons by year, player age, and number of stolen bases. (As in other examples, this grouping will not affect the likelihood, and it seems to speed up the work of Stan considerably.)
 
 ```{r}
 sum_all_years_SB <- Batting %>% group_by(yearID, Age, SB) %>%
-  summarize(HR = sum(HR), AB = sum(AB)) %>% ungroup
+  summarize(HR = sum(HR), AB = sum(AB)) %>% mutate(prop = HR / AB) %>% ungroup
 ```
 
 ```{r}
@@ -477,7 +520,41 @@ ggplot(data = sum_all_years_SB) +
   geom_histogram(mapping = aes(x = prop_sim))
 ```
 
+Here is the actual distribution of HR proportions in the data. We shouldn't be trying to fit the data with the prior, but we can see how far off things are from this second histogram.
+
+```{r}
+ggplot(data = sum_all_years_SB) +
+  geom_histogram(mapping = aes(x = prop))
+```
+
+
 Huh! The Bayesians warn us about this phenomenon. (See Bayesian Workflow, Section 2.4 and Figure 3.) Weak independent priors on large numbers of parameters add up to something strong. The home-run proportions are either near 0% or 100%. If we did not have a lot of data to fit the model, we would have to use stronger priors to get something reasonable here. In our case, there is so much data that the prior distributions do not matter much (at least for this model).
+
+We can repeat setting stronger priors.
+
+```{r}
+prior24b2 <- stan(
+  file = "HR24b_prior_sim2.stan",
+  data = data24b,
+  algorithm = "Fixed_param",
+  iter = 1,
+  chains = 1
+)
+```
+
+```{r}
+HR_sim2 <- (rstan :: extract)(prior24b2)$HR[1,]
+
+sum_all_years_SB2 <- sum_all_years_SB %>% mutate(HR_sim = HR_sim2,
+                                                prop_sim = HR_sim / AB)
+```
+
+```{r}
+ggplot(data = sum_all_years_SB2) +
+  geom_histogram(mapping = aes(x = prop_sim))
+```
+
+That prior distribution of simulated HR proportions looks better than what we got with the very weak priors on `beta1` and `c`. But perhaps these priors would be too strong...
 
 The next chunk fits the model.
 
@@ -491,7 +568,9 @@ fit24b <- stan(
 
 We have another version of the model that also generates replications.
 
-(Here is an RStan demo with some inspirational code: [http://avehtari.github.io/BDA_R_demos/demos_rstan/ppc/poisson-ppc.html])
+(Here is an RStan demo with some inspirational code for working with the replications: [http://avehtari.github.io/BDA_R_demos/demos_rstan/ppc/poisson-ppc.html]. Here is another vignette with examples of posterior predictive checks: [https://cran.r-project.org/web/packages/bayesplot/vignettes/graphical-ppcs.html])
+
+A better way to do this would be to remove the rows in the data table for playes with 0 at-bats. We could then have Stan calculate proportions (without divide-by-0 errors). I got around those rows in an ugly way below.
 
 ```{r}
 fit24b_reps <- stan(
@@ -509,17 +588,19 @@ dim(HR_rep)
 
 
 ```{r}
-ppc_hist(sum_all_years_SB %>% pull(HR), HR_rep[1:8, ], binwidth = 1)
+ppc_hist(sum_all_years_SB %>% filter(AB > 0) %>% pull(prop) ,
+         HR_rep[1:8, sum_all_years_SB$AB > 0] / (sum_all_years_SB %>% filter(AB > 0) %>% pull(AB))) +
+  xlim(0, 0.3)
 ```
 
-Yuck... A poor fit. The model doesn't reproduce low numbers of home runs as we see in the original data set.
+Yuck... A poor fit. The model replications are quite consistent---and don't look much like the original data. In the model, home-run percentages over 10% and as high as 20% sometimes occur. These never happen in the real data. The distribution of proportions in the simulated data has mode at close to 0. In the real data, the model appears closer to 3%.
 
 ```{r}
-ppc_dens_overlay(sum_all_years_SB %>% pull(HR), HR_rep[1:50, ])
+ppc_dens_overlay(sum_all_years_SB %>% filter(AB > 0) %>% pull(prop) ,
+         HR_rep[1:50, sum_all_years_SB$AB > 0] / (sum_all_years_SB %>% filter(AB > 0) %>% pull(AB))) +
+  xlim(0, 0.3)
 ```
-This family of density plots shows the same thing. A basic check of the model (histogram of home-run counts in our groups) shows a mismatch.
-
-The situation reminds me of the pictures in Section 26.2 of the Stan User's Guide [https://mc-stan.org/docs/2_26/stan-users-guide/plotting-multiples.html]. In that section, the authors show an overdispersed count variable (negative binomial) fit with a binomial model. There is more on the same example in Section 26.3, using a test statistic and the p-value idea to quantify the poor fit.
+This family of density plots shows the same thing as the histograms. The data from the model are quite consistent---and quite different from the original data.
 
 Perhaps I will add more here, trying some better posterior plots from the bayesplot package. See, for example, this page [https://mc-stan.org/bayesplot/reference/PPC-errors.html], which shows how to make the kind of binned-residual graphs for binomial models that we used in MATH 313.
 
