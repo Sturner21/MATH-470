@@ -3,6 +3,67 @@ title: "Draft 1"
 format: html
 ---
 
+```{r}
+#| message: false
+#| warning: false
+
+library(tidyverse)
+library(rstan)
+library(Lahman)
+library(bayesplot)
+```
+
+```{r}
+#Set Stan to read the amount of cores that your computer can handel
+options(mc.cores = parallel::detectCores())
+rstan_options(auto_write = TRUE)
+```
+
+```{r}
+#| message: false
+
+#Creates a DF called "Batting" which has players stats from 1973-2019
+
+#Load the DF's from Lahman directly
+Batting <- Lahman::Batting
+Teams <- Lahman::Teams
+People <- Lahman::People
+
+Batting <- Batting %>% 
+  #Minimum year = DH was introduced; maximum year = before COVID
+  filter(yearID >= 1973 & yearID <= 2019)
+
+#Filter teams for years considered and select only necessary columns
+Teams <- Teams %>% 
+  filter(yearID>=1973 & yearID <= 2019) %>% 
+  select(yearID, teamID, park)
+
+#Combine current "Batting" and "Teams" DF to associate player with stadium played at
+Batting <- Batting %>% 
+  right_join(Teams, by = join_by(yearID, teamID))
+
+#Add player's age to the "Batting" DF
+Batting <- Batting %>% 
+  right_join(Lahman::People, by = join_by(playerID)) %>% 
+  mutate(Age = yearID - birthYear, .after=yearID) %>%
+  #Don't consider the people who don't have a birthday in the database
+  drop_na(Age)
+
+#Make the lgID variable into an index variable
+Batting <- Batting %>% 
+  mutate(lg = case_when(lgID == "NL" ~ 1,
+                        lgID == "AL" ~ 2), .after=lgID)
+
+
+#Make an index for the parks to add them to the model
+
+#The index goes from 1-88. No idea how it came up with them but I kept the park name in Batting so anyone should be able to reference to see how the parks impact player performance
+
+Batting <- Batting %>% 
+  mutate(park = as.factor(park)) %>% 
+  mutate(park_index = as.integer(park), .after = park)
+```
+
 # Fellingham & Fisher (2017)
 
 To apply the methods discussed in *Statistical Rethinking* by Richard McElreath, Dr. Parson and I decided to replicate *Predicting Home Run Production in Major League Baseball Using a Bayesian Semiparametric Model* by Gilbert Fellingham and Jared Fisher. This article in particular has drawn our attention because of some unique and interesting modeling choices made by the authors. Indeed, both Dr. Parson and I believe that while the initial investigation by Fellingham and Fisher (2017) is interesting, there are some questionable choices made by the authors throughout the paper. For example, there are few independent variables and their associated priors are very weak. The paper does a good job with displaying plenty of visualizations for the reader, yet, under careful examination one is left with the impression that the authors have cherry-picked certain players to focus on rather than examining players at random to examine the validity of their model. These reasons in tandem bring their findings into question. Thus, Dr. Parson and I have embarked to investigate the same research question, can we forecast home run potential using a Bayesian model which accounts for age, home ballpark, and other factors.
@@ -17,21 +78,14 @@ Another interesting quirk of baseball is that, like soccer, stadiums differ in d
 
 It is obvious from examining the years that stadiums were used to infer that baseball has been played for a long time. Indeed, MLB as we know it has been played since about 1871 and the origins of the game go back even father than that. Over this time the some rules of the game have undergone incredible transformations which vastly change the nature of the game. For example, from 1900-1920 baseball was in the "deadball era." During this period the materials used to create baseballs made it so that the ball absorbed much more force than it does today. This had a plethora of implications for the game and how it was played; HR's were much less common and since they were harder to hit. In contrast, the period from 1994-2004 is known as the "steroid era" because of the rampant use of performance enhancing drugs (PED) used by players. This, in combination with other factors, led to players obliterating previous records, such as the career and season home runs records. It is obvious from these facts that decade played for player's had a drastic impact on their ability to produce outcomes. In fact, this can be visualized by considering all the runs scored during a given season from 1871-2019 displayed in @fig-RunsByYear.
 
-Finally, it does not take an advanced degree to understand that age is an important factor in athletic ability. To an extent in MLB, seniority can act both as a blessing and a curse. Older players are less able to hit home runs because their body is starting to lose its peak athletic performance it had when it was, say, 30. Yet, these players also have more experience than younger players and thus may be better able to hit home runs from strategies they have found during their time playing. Further we can visualize this by looking at the median home runs hit by each player from 1871-2022, which is displayed in 
+Finally, it does not take an advanced degree to understand that age is an important factor in athletic ability. To an extent in MLB, seniority can act both as a blessing and a curse. On the one hand, older players are less able to hit home runs because their body is starting to lose its peak athletic performance it had when it was, say, 30. On the other hand, these older players also have more experience than younger players and thus may be better able to hit home runs from strategies they have found during their time playing. Further we can visualize this by looking at the median home runs hit by each player from 1871-2022, which is displayed in @fig-HR.By.Age.All. However, this graph does not depict some of the nuances of the data well. For example, we have almost no data on how often 18 -year-olds hit HR's because they play in MLB infrequently. As can be seen with the standard error bars on the ages above 40, older players suffer a similar problem of small sample size. Instead, consider @fig-HR.By.Age.20to40 which shows only considers players who are 20-40 years old during the season. This graph clearly shows the complex non-linear relationship between player performance and age. It shows that players are generally improving in their ability to hit HR's from 20-30 years old. Then, however, we see a slight downwards trend followed by an upward trend with increasing error bars. This shows that as players age past 30 their abilities start to decline. However, the jump afterwards can probably be attributed to players who are very good, continuing their careers. If a player is very good then they are going to be able to perform at above average when they are, say, 35. However, if the player is not generally considered good, then a team will likely opt to try out a new young rookie who may not be as good in the moment but is more projectable. Thus, we see less players playing past 35 which explains the higher standard errors, but they are of a higher caliber than any other age group which is why they are still playing, thus we see their proportion as higher.
 
 ## Model
 
 # Figures
 
 ```{r}
-#| message: false
-#| warning: false
-
-library(Lahman)
-library(tidyverse)
-```
-
-```{r}
+#Make the dataframe needed for Runs Scored by year graph
 Runs.By.Year <- Lahman::Teams %>% 
   group_by(yearID) %>% 
   summarize(R = sum(R))
@@ -47,11 +101,37 @@ ggplot(data = Runs.By.Year)+
   geom_rect(inherit.aes = FALSE, aes(xmin=1994, xmax=2004, ymin=0, ymax=26000), color="transparent", fill="orange", alpha=0.005)+
   scale_y_continuous(limits =c(0,26000), breaks = seq(from=0, to=25000, by=5000))+
   scale_x_continuous(breaks = seq(from=1870, to=2020, by=10))+
-  labs(title = "Runs Scored in MLB by Year",
+  labs(title = "Cumulative Runs Scored in MLB by Year",
        x = "Year",
        y = "Runs Scored")
 ```
 
+```{r}
+#Make DF which describes the HR by age across the timeline considered
+HR.Prop.Age <- Batting %>% 
+  group_by(Age) %>% 
+  summarize(HR = sum(HR), AB = sum(AB)) %>% 
+  mutate(prop = HR / AB, prop.se = sqrt(prop*(1-prop)/AB))
+```
 
+```{r}
+#| label: fig-HR.By.Age.All
 
+ggplot(data = HR.Prop.Age)+
+  geom_pointrange(mapping = aes(x = Age, y = prop, ymin = prop - prop.se,
+                                ymax = prop + prop.se))+
+  labs(title = "Proportion of Home Runs per At-Bat by Age",
+       x = "Age",
+       y = "Proportion of HR per AB")
+```
 
+```{r}
+#| label: fig-HR.By.Age.20to40
+
+ggplot(data = HR.Prop.Age %>% filter(Age >=20 & Age <= 40))+
+  geom_pointrange(mapping = aes(x = Age, y = prop, ymin = prop - prop.se,
+                                ymax = prop + prop.se))+
+  labs(title = "Proportion of Home Runs per At-Bat by Age",
+       x = "Age",
+       y = "Proportion of HR per AB")
+```
