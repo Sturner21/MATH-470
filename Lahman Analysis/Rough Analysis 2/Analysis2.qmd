@@ -89,6 +89,16 @@ Sum.Batting <- Batting %>%
 ```
 
 ```{r}
+#Make an index for the parks to add them to the model
+
+#The index goes from 1-88. No idea how it came up with them but I kept the park name in Batting so anyone should be able to reference to see how the parks impact player performance
+
+Batting <- Batting %>% 
+  mutate(park = as.factor(park)) %>% 
+  mutate(park_index = as.integer(park), .after = park)
+```
+
+```{r}
 #Create a column which described the decade a player was born in
 
 Batting %>% 
@@ -379,7 +389,6 @@ ggplot(data=no_age_sum_all_years)+
 
 This confirms my hypothesis that players are starting to hit home runs with more frequency at the trade off of stolen bases. Those who remain stealing bags are may not be hitting home runs and thus we should at least try adding SB's into the model to see how it does.
 
-
 ```{r}
 data24 <- list(
   N = nrow(sum_all_years),
@@ -405,10 +414,10 @@ Iterating using both 500 and 1000 loops leaves an error. Suggesting that using S
 ```{r}
 summary(fit24)$summary
 ```
+
 ```{r}
 plot(fit24, pars = c("beta1", "c"))
 ```
-
 
 ### Another try with SB
 
@@ -423,6 +432,7 @@ ggplot(data = Batting_summary_SB) +
   geom_pointrange(mapping = aes(x = SB, y = prop, ymin = prop - se,
                                 ymax = prop + se))
 ```
+
 We can graph again on the logit scale, focusing on cases where the number of stolen bases is less than 50. The association looks plausibly linear, suggesting that a logit-binomial model may be reasonable.
 
 ```{r}
@@ -433,12 +443,14 @@ ggplot(data = Batting_summary_SB %>% filter(SB < 50)) +
                                 ymax = logit(prop + se))) +
   geom_smooth(method = "lm", mapping = aes(x = SB, y = logit(prop)))
 ```
+
 Since we will use both stolen bases and age in the model, we can make the same sort of graph after grouping players by age. Let's look first at the distribution of age.
 
 ```{r}
 ggplot(data = Batting) +
   geom_histogram(mapping = aes(x = Age), binwidth = 1)
 ```
+
 (What a lovely histogram!)
 
 We will split players into three roughly equally sized age groups, determined by quantiles.
@@ -446,6 +458,7 @@ We will split players into three roughly equally sized age groups, determined by
 ```{r}
 Batting %>% summarize(quantile(Age, 0.33), quantile(Age, 0.67))
 ```
+
 Our three groups are "26 or younger", "27 to 30", and "over 30".
 
 ```{r}
@@ -506,6 +519,7 @@ prior24b <- stan(
   chains = 1
 )
 ```
+
 To get an overall sense for the simulated data, we look at simulated home-run proportions in the groups of players (by year, age, and stolen bases).
 
 ```{r}
@@ -526,7 +540,6 @@ Here is the actual distribution of HR proportions in the data. We shouldn't be t
 ggplot(data = sum_all_years_SB) +
   geom_histogram(mapping = aes(x = prop))
 ```
-
 
 Huh! The Bayesians warn us about this phenomenon. (See Bayesian Workflow, Section 2.4 and Figure 3.) Weak independent priors on large numbers of parameters add up to something strong. The home-run proportions are either near 0% or 100%. If we did not have a lot of data to fit the model, we would have to use stronger priors to get something reasonable here. In our case, there is so much data that the prior distributions do not matter much (at least for this model).
 
@@ -568,7 +581,7 @@ fit24b <- stan(
 
 We have another version of the model that also generates replications.
 
-(Here is an RStan demo with some inspirational code for working with the replications: [http://avehtari.github.io/BDA_R_demos/demos_rstan/ppc/poisson-ppc.html]. Here is another vignette with examples of posterior predictive checks: [https://cran.r-project.org/web/packages/bayesplot/vignettes/graphical-ppcs.html])
+(Here is an RStan demo with some inspirational code for working with the replications: \[http://avehtari.github.io/BDA_R_demos/demos_rstan/ppc/poisson-ppc.html\]. Here is another vignette with examples of posterior predictive checks: \[https://cran.r-project.org/web/packages/bayesplot/vignettes/graphical-ppcs.html\])
 
 A better way to do this would be to remove the rows in the data table for playes with 0 at-bats. We could then have Stan calculate proportions (without divide-by-0 errors). I got around those rows in an ugly way below.
 
@@ -586,7 +599,6 @@ HR_rep <- as.matrix(fit24b_reps, pars = "HR_rep")
 dim(HR_rep)
 ```
 
-
 ```{r}
 ppc_hist(sum_all_years_SB %>% filter(AB > 0) %>% pull(prop) ,
          HR_rep[1:8, sum_all_years_SB$AB > 0] / (sum_all_years_SB %>% filter(AB > 0) %>% pull(AB))) +
@@ -600,10 +612,10 @@ ppc_dens_overlay(sum_all_years_SB %>% filter(AB > 0) %>% pull(prop) ,
          HR_rep[1:50, sum_all_years_SB$AB > 0] / (sum_all_years_SB %>% filter(AB > 0) %>% pull(AB))) +
   xlim(0, 0.3)
 ```
+
 This family of density plots shows the same thing as the histograms. The data from the model are quite consistent---and quite different from the original data.
 
-Perhaps I will add more here, trying some better posterior plots from the bayesplot package. See, for example, this page [https://mc-stan.org/bayesplot/reference/PPC-errors.html], which shows how to make the kind of binned-residual graphs for binomial models that we used in MATH 313.
-
+Perhaps I will add more here, trying some better posterior plots from the bayesplot package. See, for example, this page \[https://mc-stan.org/bayesplot/reference/PPC-errors.html\], which shows how to make the kind of binned-residual graphs for binomial models that we used in MATH 313.
 
 ## Multilevel Model
 
@@ -660,3 +672,140 @@ saveRDS(fit25, "HR25.rds")
 ```
 
 Not sure that I did this right so I'm going to leave it here for now.
+
+I also wanted to investigate how park factors can play into a hitter's ability. So, let's add them into the model here. As a note, we don't need to create a diferent coefficient for every year since the ballpark doesn't move.
+
+```{r}
+sum_all_years_park <- Batting %>% group_by(yearID, park, park_index, Age) %>%
+  summarize(HR = sum(HR), AB = sum(AB), SB = sum(SB))
+```
+
+```{r}
+data26 <- list(
+  N = nrow(sum_all_years_park),
+  n_year = n_distinct(sum_all_years_park$yearID),
+  AB = sum_all_years_park %>% pull(AB),
+  HR = sum_all_years_park %>% pull(HR),
+  Year = sum_all_years_park %>% pull(yearID) -1972,
+  Age = sum_all_years_park %>% pull(Age) -30,
+  park = sum_all_years_park %>% pull(park_index)
+)
+```
+
+```{r}
+fit26 <- stan(
+  file = "HR26.stan",
+  data = data26,
+  iter = 500
+)
+```
+
+Even 500 iterations did not work and took 15 minutes so I think it's safe to say that adding the stadium might not be the greatest idea until we get more computing power. However, I still want to save this.
+
+```{r}
+saveRDS(fit26, "HR26.rds")
+```
+
+Of course, the error that is being reported is one of poor priors, so I'll try and go in and give it some more confident priors.
+
+```{r}
+fit26b <- stan(
+  file = "HR26b.stan",
+  data = data26,
+  iter = 400
+)
+```
+
+```{r}
+saveRDS(fit26b, "HR26b.rds")
+```
+
+Still get the warning after 400 iterations AND making the priors more informative. Not sure why this is behaving so poorly, there is such good theory to support this hypothesis. Of course, this (along with the problems Dr. Parson was facing) could explain why Fellingham and Fisher had to do over 200,000 iterations (I believe it was that crazy amount).
+
+## Graphical Exploration pt.2
+
+Do we see evidence of probability changing with age and year?
+
+```{r}
+p_year_age <- Batting %>% 
+  group_by(yearID, Age) %>% 
+  summarize(HR = sum(HR), AB = sum(AB)) %>% 
+  mutate(p = HR / AB)
+```
+
+```{r}
+ggplot(data = p_year_age)+
+  aes(x=yearID, y=p, color=as.factor(Age))+
+  geom_line()
+```
+
+Clearly, we aren't getting anything from this graph. So, let's graph two more, one with the player's age rounded to the it's 10 (ie. 32-\> 30 and 36 -\> 30) and one where we use the cut-offs from the prior examination (below 27, 27 to 30, and above 30).
+
+```{r}
+p_year_age <- p_year_age %>% 
+  mutate(age_10 = Age / 10, .after = Age) %>% 
+  mutate(age_10 = as.integer(age_10)) %>% 
+  mutate(age_group = case_when(Age < 27 ~ "young",
+                               Age >= 27 & Age <= 30 ~ "medial",
+                               Age > 30 ~ "old") , .after = age_10) %>% 
+  mutate(age_group = as.factor(age_group)) %>% 
+  mutate(age_10 = as.factor(age_10))
+```
+
+```{r}
+ggplot(data = p_year_age)+
+  aes(x = yearID, y = p, color = age_10)+
+  geom_line()+
+  geom_point()
+```
+
+```{r}
+ggplot(data = p_year_age)+
+  aes(x = yearID, y = p, color = age_group)+
+  geom_line()+
+  geom_point()
+```
+
+Based on these graphs, there does not seem to be good evidence to justify fitting a different slope for each age in each year. They all tend to the same amounts. Other than the 50+ players and the 18 and 19 year-olds. However, I suspect that this is due much more to a lack of a representitive sample than anything else.
+
+Another things we wanted to check was the fit of a polynomial with degree 4 to see what Fellingham and Fisher were getting at with their Detrich process. We already have a graph but it's at the top so let's bring it down to see it again.
+
+```{r}
+Batting_summary2 <- Batting_summary %>% 
+  filter(Age >=20 & Age <= 40)
+```
+
+```{r}
+ggplot(data = Batting_summary2) +
+  geom_pointrange(mapping = aes(x = Age, y = prop, ymin = prop - se,
+                                ymax = prop + se))
+```
+
+We can run an lm to get a general sense of what these coefficients should be
+
+```{r}
+quart <- lm(data = Batting_summary2, prop ~ Age + I(Age^2) + I(Age^3) + I(Age^4)) 
+
+quart %>% 
+  summary()
+```
+
+Not that it means much but we do get significance on each coefficient. I find this interesting because I've never seen a degree 4 polynomial have such significance.
+
+```{r}
+ggplot(data = Batting_summary2) +
+  geom_pointrange(mapping = aes(x = Age, y = prop, ymin = prop - se,
+                                ymax = prop + se))+
+  geom_function(fun = function(x) (2.364e-01) + (-3.334e-02)*x + (1.871e-03)*(x^2) + (-4.463e-05)*(x^3) + (3.873e-07)*(x^4), color="red")
+```
+
+So, very clearly this has a much better fit to the age variable. How does it look for the full data set we considered (not just the 20-40 year-olds).
+
+```{r}
+ggplot(data = Batting_summary) +
+  geom_pointrange(mapping = aes(x = Age, y = prop, ymin = prop - se,
+                                ymax = prop + se))+
+  geom_function(fun = function(x) (2.364e-01) + (-3.334e-02)*x + (1.871e-03)*(x^2) + (-4.463e-05)*(x^3) + (3.873e-07)*(x^4), color="red")
+```
+
+This is actually pretty funny. We lose all the fit past the age of 40 when considering the whole data set. Since we can't even justify the 4th degree and this doesn't fit past 40 it probably isn't a good idea to use this fit. Of course, if all we care about is fit, then we could just keep addign degrees until all years considered are accounted for.

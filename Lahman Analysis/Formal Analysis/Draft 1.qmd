@@ -1,0 +1,57 @@
+---
+title: "Draft 1"
+format: html
+---
+
+# Fellingham & Fisher (2017)
+
+To apply the methods discussed in *Statistical Rethinking* by Richard McElreath, Dr. Parson and I decided to replicate *Predicting Home Run Production in Major League Baseball Using a Bayesian Semiparametric Model* by Gilbert Fellingham and Jared Fisher. This article in particular has drawn our attention because of some unique and interesting modeling choices made by the authors. Indeed, both Dr. Parson and I believe that while the initial investigation by Fellingham and Fisher (2017) is interesting, there are some questionable choices made by the authors throughout the paper. For example, there are few independent variables and their associated priors are very weak. The paper does a good job with displaying plenty of visualizations for the reader, yet, under careful examination one is left with the impression that the authors have cherry-picked certain players to focus on rather than examining players at random to examine the validity of their model. These reasons in tandem bring their findings into question. Thus, Dr. Parson and I have embarked to investigate the same research question, can we forecast home run potential using a Bayesian model which accounts for age, home ballpark, and other factors.
+
+## Background
+
+In Major League Baseball (MLB) the team on offense is allowed to send one player, at a time, up to home plate to "bat." Any time a player is sent up to bat this counts as a plate appearance (PA) for said player. Depending on its outcome the PA may or may not be considered an at-bat (AB). If the PA ends in the player being walked (BB \[base on balls\]) then it is not recorded as an AB because it is thought the player did not receive a fair chance at hitting the baseball. On the other hand, if the PA ends in the player getting a hit or getting out, then it is assumed that he had a fair chance at hitting the ball and the PA is recorded as an AB.
+
+The principle concern of this paper is how to model the amount of home runs (HR) a player will hit in a given season. Home runs are an outcome which is recorded as an AB where the player is able to touch all four bases before being "tagged out," where the defense is able to touch the player with the baseball. The primary way this occurs, and is the one that most readers will be familiar with, is by hitting the ball over the fence in the outfield. However, it is just as correct for the ball to remain in the boundaries of the field and for the player to reach all bases without being tagged out. Due to HR's being recorded as AB's both ourselves and Fellingham and Fisher (2017) incorporate AB's in our models rather than PA's.
+
+Another interesting quirk of baseball is that, like soccer, stadiums differ in dimensions. This is not universal; baseball fields and stadiums must have the same measurements for their infields. Yet, for the most part baseball stadiums are allowed to configure their outfields as they please. This gives baseball stadiums a variety of unique shapes ranging in outfield sizes. For example, Fenway Park (1923-) is known to have the closest outfield wall with their "Green Monster" in left field being only 305 ft. from home plate. While the Polo Grounds (1891-1963) boasted one of the furthest walls from home play at 483 ft. in center field. Stadiums also differ in location. Marlins Park (2012-2020) sits at 15 ft. above sea level while Coors Field (1995-) sits at 5183 ft. above sea level. As illustrated there is not only vastly different dimensions that baseball fields can take on but also different environments which affect a player's ability to hit home runs. Thus, any model which attempts to model players' ability to hit HR's needs to consider ballpark factors.
+
+It is obvious from examining the years that stadiums were used to infer that baseball has been played for a long time. Indeed, MLB as we know it has been played since about 1871 and the origins of the game go back even father than that. Over this time the some rules of the game have undergone incredible transformations which vastly change the nature of the game. For example, from 1900-1920 baseball was in the "deadball era." During this period the materials used to create baseballs made it so that the ball absorbed much more force than it does today. This had a plethora of implications for the game and how it was played; HR's were much less common and since they were harder to hit. In contrast, the period from 1994-2004 is known as the "steroid era" because of the rampant use of performance enhancing drugs (PED) used by players. This, in combination with other factors, led to players obliterating previous records, such as the career and season home runs records. It is obvious from these facts that decade played for player's had a drastic impact on their ability to produce outcomes. In fact, this can be visualized by considering all the runs scored during a given season from 1871-2019 displayed in @fig-RunsByYear.
+
+Finally, it does not take an advanced degree to understand that age is an important factor in athletic ability. To an extent in MLB, seniority can act both as a blessing and a curse. Older players are less able to hit home runs because their body is starting to lose its peak athletic performance it had when it was, say, 30. Yet, these players also have more experience than younger players and thus may be better able to hit home runs from strategies they have found during their time playing. Further we can visualize this by looking at the median home runs hit by each player from 1871-2022, which is displayed in 
+
+## Model
+
+# Figures
+
+```{r}
+#| message: false
+#| warning: false
+
+library(Lahman)
+library(tidyverse)
+```
+
+```{r}
+Runs.By.Year <- Lahman::Teams %>% 
+  group_by(yearID) %>% 
+  summarize(R = sum(R))
+```
+
+```{r}
+#| label: fig-RunsByYear
+
+ggplot(data = Runs.By.Year)+
+  aes(x=yearID, y=R)+
+  geom_line()+
+  geom_rect(inherit.aes = FALSE, aes(xmin=1900, xmax=1920, ymin=0, ymax=26000), color="transparent", fill="red", alpha=0.005)+
+  geom_rect(inherit.aes = FALSE, aes(xmin=1994, xmax=2004, ymin=0, ymax=26000), color="transparent", fill="orange", alpha=0.005)+
+  scale_y_continuous(limits =c(0,26000), breaks = seq(from=0, to=25000, by=5000))+
+  scale_x_continuous(breaks = seq(from=1870, to=2020, by=10))+
+  labs(title = "Runs Scored in MLB by Year",
+       x = "Year",
+       y = "Runs Scored")
+```
+
+
+
+
