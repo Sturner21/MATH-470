@@ -722,6 +722,80 @@ saveRDS(fit26b, "HR26b.rds")
 
 Still get the warning after 400 iterations AND making the priors more informative. Not sure why this is behaving so poorly, there is such good theory to support this hypothesis. Of course, this (along with the problems Dr. Parson was facing) could explain why Fellingham and Fisher had to do over 200,000 iterations (I believe it was that crazy amount).
 
+### 11/3 meeting
+
+```{r}
+by_park <- Batting %>% 
+  group_by(yearID, park) %>% 
+  summarize(HR = sum(HR), AB = sum(AB)) %>% 
+  mutate(park_index = as.integer(park))
+```
+
+```{r}
+data26c <- list(
+  N = nrow(by_park),
+  n_year = n_distinct(by_park$yearID),
+  n_park = n_distinct(by_park$park_index),
+  AB = by_park %>% pull(AB),
+  HR = by_park %>% pull(HR),
+  park = by_park %>% pull(park_index),
+  Year = by_park %>% pull(yearID) -1972
+)
+```
+
+```{r}
+fit26c <- stan(
+  file = "HR26c.stan",
+  data = data26c,
+  iter = 2000
+)
+```
+
+```{r}
+print(fit26c, pars = "b")
+```
+
+```{r}
+traceplot(fit26c)
+```
+
+```{r}
+saveRDS(fit26c, "HR26c.rds")
+```
+
+```{r}
+year_and_stadium_age <- Batting %>% 
+  group_by(yearID, park, Age) %>% 
+  summarize(HR = sum(HR), AB = sum(AB)) %>% 
+  mutate(park_index = as.integer(park)) %>% 
+  mutate(cAge = Age - 30, .after = Age)
+```
+
+```{r}
+data26d <- list(
+  N = nrow(year_and_stadium_age),
+  n_year = n_distinct(year_and_stadium_age$yearID),
+  n_park = n_distinct(year_and_stadium_age$park_index),
+  AB = year_and_stadium_age %>% pull(AB),
+  HR = year_and_stadium_age %>% pull(HR),
+  park = year_and_stadium_age %>% pull(park_index),
+  Year = year_and_stadium_age %>% pull(yearID) -1972,
+  cAge = year_and_stadium_age %>% pull(cAge)
+)
+```
+
+```{r}
+fit26d <- stan(
+  file = "HR26d.stan",
+  data = data26d,
+  iter = 200
+)
+```
+
+```{r}
+summary(fit26d, 'beta1')$summary
+```
+
 ## Graphical Exploration pt.2
 
 Do we see evidence of probability changing with age and year?
@@ -809,3 +883,8 @@ ggplot(data = Batting_summary) +
 ```
 
 This is actually pretty funny. We lose all the fit past the age of 40 when considering the whole data set. Since we can't even justify the 4th degree and this doesn't fit past 40 it probably isn't a good idea to use this fit. Of course, if all we care about is fit, then we could just keep addign degrees until all years considered are accounted for.
+
+```{r}
+ggplot(sum_all_years_park)+
+  geom_histogram(aes(x = park))
+```

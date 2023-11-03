@@ -45,7 +45,9 @@ model {
   sigma_b ~ exponential(1);
   
   // In contrast, this sets our prior for "beta1" to just be a constant across the model
-    beta1 ~ normal(0, 1);
+    beta1 ~ normal(0, .05);
+    
+    // want to make it like the year instead (this will make it an additive constant)
     beta2 ~ normal(0, 0.3);
 
 }
