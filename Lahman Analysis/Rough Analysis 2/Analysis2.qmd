@@ -894,7 +894,10 @@ player_index_small <- Batting %>%
   mutate(player_index = as.factor(playerID), .after = playerID) %>% 
   mutate(player_index = as.integer(player_index)) %>% 
   mutate(cAge = Age - 30, .after = Age) %>% 
-  mutate(year_index = yearID - min(yearID) + 1, .after = yearID)
+  mutate(year_index = yearID - min(yearID) + 1, .after = yearID) %>%
+  #For this test of conecpt we'll need to redefine the stadium's index since not all stadiums in the original dataset were used in 2018 and 2019
+  select(!park_index) %>% 
+  mutate(park_index = as.integer(park), .after = park)
 ```
 
 ```{r}
@@ -926,6 +929,74 @@ data27 <- list(
 fit27 <- stan(
   file = "HR27.stan",
   data = data27,
+  iter = 1000
+)
+```
+
+```{r}
+plot(fit27, pars = "a")
+```
+
+This plot is very packed but from it we can see that there is a fair amount of variance among the players and their home run rates. However, even with 1000 iterations we still get the warnings of that the posterior medians and medians may be unreliable. We can get a sense of this from the large standard error bars on the parameters. On the logit scale -5 represents a probability of 0.0067, while a -2 represents 0.119. I'm not sure if there's anything that we can do to solve this problem. So, maybe we can reduce the standard errors if we include more factors such as year.
+
+```{r}
+data27b <- list(
+  N = nrow(player_index_small),
+  n_player = n_distinct(player_index_small$player_index),
+  n_year = n_distinct(player_index_small$yearID),
+  AB = player_index_small %>% pull(AB),
+  HR = player_index_small %>% pull(HR),
+  Player = player_index_small %>% pull(player_index),
+  Year = player_index_small %>% pull(year_index)
+)
+```
+
+```{r}
+fit27b <- stan(
+  file = "HR27b.stan",
+  data = data27b,
+  iter = 3000
+)
+```
+
+Normally, I would stop the model at 1,000 simulations to save time; however, with this one I saw that we were getting really close to having the Rhat getting to 1. And only having one error is better to me than having two.
+
+```{r}
+print(fit27b, pars = "a")
+```
+
+```{r}
+plot(fit27b, pars="a")
+```
+
+Including the year parameter removed a little bit of of the extremeness from the plot.
+
+```{r}
+traceplot(fit27b)
+```
+
+And in general the trace plots look pretty good. Maybe a\[4\] isn't great or a\[5\] but they're not terrible either.
+
+So, now we can probably move into including a park factor. I think this will play a larger role than the age of a player.
+
+```{r}
+data27c <- list(
+  N = nrow(player_index_small),
+  n_player = n_distinct(player_index_small$player_index),
+  n_year = n_distinct(player_index_small$yearID),
+  n_park = n_distinct(player_index_small$park_index),
+  AB = player_index_small %>% pull(AB),
+  HR = player_index_small %>% pull(HR),
+  Player = player_index_small %>% pull(player_index),
+  Year = player_index_small %>% pull(year_index),
+  park = player_index_small %>% pull(park_index)
+)
+```
+
+```{r}
+fit27c <- stan(
+  file = "HR27c.stan",
+  data = data27c,
   iter = 200
 )
 ```
