@@ -1,25 +1,11 @@
-//
-// This Stan program defines a simple model, with a
-// vector of values 'y' modeled as normally distributed
-// with mean 'mu' and standard deviation 'sigma'.
-//
-// Learn more about model development with Stan at:
-//
-//    http://mc-stan.org/users/interfaces/rstan.html
-//    https://github.com/stan-dev/rstan/wiki/RStan-Getting-Started
-//
-
-// Input the data here
-// Should ask why we use some as "int," others as "arrays," and some as "vectors"
 data {
   int<lower=0> N;
   int<lower=0> n_player;
-  vector[N] int<lower=0> AB;
-  vector[N] int<lower=0> HR;
-  vector[N] Player;
+  array[N] int<lower=0> AB;
+  array[N] int<lower=0> HR;
+  array[N] int Player;
 }
 
-// Declare the parameters here so Stan knows what to expect
 parameters {
   
   vector[n_player] a;
