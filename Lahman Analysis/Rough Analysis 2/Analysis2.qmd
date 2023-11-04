@@ -882,9 +882,50 @@ ggplot(data = Batting_summary) +
   geom_function(fun = function(x) (2.364e-01) + (-3.334e-02)*x + (1.871e-03)*(x^2) + (-4.463e-05)*(x^3) + (3.873e-07)*(x^4), color="red")
 ```
 
-This is actually pretty funny. We lose all the fit past the age of 40 when considering the whole data set. Since we can't even justify the 4th degree and this doesn't fit past 40 it probably isn't a good idea to use this fit. Of course, if all we care about is fit, then we could just keep addign degrees until all years considered are accounted for.
+This is actually pretty funny. We lose all the fit past the age of 40 when considering the whole data set. Since we can't even justify the 4th degree and this doesn't fit past 40 it probably isn't a good idea to use this fit. Of course, if all we care about is fit, then we could just keep adding degrees until all years considered are accounted for.
+
+## Player intercepts
 
 ```{r}
-ggplot(sum_all_years_park)+
-  geom_histogram(aes(x = park))
+player_index_small <- Batting %>% 
+  #Consider only two years to get a managable amount of players
+  filter(yearID == 2018 | yearID == 2019) %>% 
+  #Number the players for the multilevel model
+  mutate(player_index = as.factor(playerID), .after = playerID) %>% 
+  mutate(player_index = as.integer(player_index)) %>% 
+  mutate(cAge = Age - 30, .after = Age) %>% 
+  mutate(year_index = yearID - min(yearID) + 1, .after = yearID)
+```
+
+```{r}
+<- list(
+  N = nrow(player_index_small),
+  n_year = n_distinct(player_index_small$yearID),
+  n_park = n_distinct(player_index_small$park_index),
+  n_player = n_distinct(player_index_small$player_index),
+  AB = player_index_small %>% pull(AB),
+  HR = player_index_small %>% pull(HR),
+  park = player_index_small %>% pull(park_index),
+  Year = player_index_small %>% pull(year_index),
+  cAge = player_index_small %>% pull(cAge),
+  Player = player_index_small %>% pull(player_index)
+)
+```
+
+```{r}
+data27 <- list(
+  N = nrow(player_index_small),
+  n_player = n_distinct(player_index_small$player_index),
+  AB = player_index_small %>% pull(AB),
+  HR = player_index_small %>% pull(HR),
+  Player = player_index_small %>% pull(player_index)
+)
+```
+
+```{r}
+fit27 <- stan(
+  file = "HR27.stan",
+  data = data27,
+  iter = 200
+)
 ```
