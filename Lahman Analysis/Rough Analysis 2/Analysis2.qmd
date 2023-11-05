@@ -896,7 +896,8 @@ player_index_small <- Batting %>%
   mutate(cAge = Age - 30, .after = Age) %>% 
   mutate(year_index = yearID - min(yearID) + 1, .after = yearID) %>%
   #For this test of conecpt we'll need to redefine the stadium's index since not all stadiums in the original dataset were used in 2018 and 2019
-  select(!park_index) %>% 
+  select(!park_index) %>% mutate(park = as.character(park)) %>%
+  mutate(park = as.factor(park)) %>%
   mutate(park_index = as.integer(park), .after = park)
 ```
 

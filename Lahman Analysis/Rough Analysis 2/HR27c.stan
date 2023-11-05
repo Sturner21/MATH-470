@@ -14,7 +14,7 @@ parameters {
   
   vector[n_player] a;
   real bar_a;
-  real sigma_a;
+  real<lower=0> sigma_a;
   
   vector[n_year] b;
   
