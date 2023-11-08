@@ -998,6 +998,92 @@ data27c <- list(
 fit27c <- stan(
   file = "HR27c.stan",
   data = data27c,
-  iter = 200
+  iter = 3500
 )
 ```
+
+```{r}
+saveRDS(fit27c, "HR27c.rds")
+```
+
+Needed to run 3500 iterations in order to reduce the Rhat values to an acceptable levels.
+
+```{r}
+plot(fit27c, pars="a")
+```
+
+Very interestingly we finally see a big reduction in the logit probabilities here. It's we will investigate the standard errors below since the graph doesn't lend itself well to this, however, we can see that their means and confidence intervals are much more closely centered on -3.5 suggesting that a lot of what we originally contriubted to player ability is actually just a ballpark effect.
+
+```{r}
+print(fit27c)
+```
+
+We can see from this table that the standard errors are not super huge so, we don't get much out of this exploration just as we didn't with the plot above. We should look into a better way of displaying them.
+
+```{r}
+plot(fit27c, pars="b")
+```
+
+There's still an interesting year effect here but not nearly as large as we see from player to player.
+
+```{r}
+plot(fit27c, pars="c")
+```
+
+Interestingly, we can see that there is some variation between stadiums. On the logit scale they go between (-0.2, 0.2) which on the non logit scale is (0.45,0.55). So a 10% change in probabilities between say, stadium 15 and stadium 32. I wonder, if we changede the prior to be less descriptive if we would see this resulting in even larger staium effects. It's certainly possible but 10% is a hugh leap anyways so I somewhat soubt that we would see much of a larger jump from a less informative prior.
+
+```{r}
+data27d <- list(
+  N = nrow(player_index_small),
+  n_year = n_distinct(player_index_small$yearID),
+  n_park = n_distinct(player_index_small$park_index),
+  n_player = n_distinct(player_index_small$player_index),
+  AB = player_index_small %>% pull(AB),
+  HR = player_index_small %>% pull(HR),
+  park = player_index_small %>% pull(park_index),
+  Year = player_index_small %>% pull(year_index),
+  cAge = player_index_small %>% pull(cAge),
+  Player = player_index_small %>% pull(player_index)
+)
+```
+
+```{r}
+fit27d <- stan(
+  file = "HR27d.stan",
+  data = data27d,
+  iter = 3000
+)
+```
+
+```{r}
+#Since this took a while let's save it quickly
+saveRDS(fit27d, "HR27d.rds")
+```
+
+So, this took a lot longer than the other simulations. Let's see how it did.
+
+```{r}
+plot(fit27d, pars="a")
+```
+
+This didn't have much of an impact compared with what it looked like before with *HR27c*.
+
+```{r}
+plot(fit27d, pars="b")
+```
+
+Agan not much of a difference.
+
+```{r}
+plot(fit27d, pars="c")
+```
+
+Still not much of a change.
+
+```{r}
+plot(fit27d, pars="beta1")
+```
+
+We can see the age factor has an almost negligable effect on player performance, at least when we only allow the effect to be linear. Fellingham and Fisher allowed for it to be non-linear so the next steps should be focused on investigating that relationship to see if it adds to our model at all.
+
+START EXPLORING NON-LINEAR EFFECT OF AGE.
