@@ -1048,6 +1048,7 @@ data27d <- list(
 ```
 
 ```{r}
+#| eval: false
 fit27d <- stan(
   file = "HR27d.stan",
   data = data27d,
