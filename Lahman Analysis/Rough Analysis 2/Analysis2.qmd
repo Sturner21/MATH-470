@@ -1085,6 +1085,138 @@ Still not much of a change.
 plot(fit27d, pars="beta1")
 ```
 
-We can see the age factor has an almost negligable effect on player performance, at least when we only allow the effect to be linear. Fellingham and Fisher allowed for it to be non-linear so the next steps should be focused on investigating that relationship to see if it adds to our model at all.
+We can see the age factor has an almost negligible effect on player performance, at least when we only allow the effect to be linear. Fellingham and Fisher allowed for it to be non-linear so the next steps should be focused on investigating that relationship to see if it adds to our model at all.
 
-START EXPLORING NON-LINEAR EFFECT OF AGE.
+### Nonlinear effects of Age
+
+Before diving into the full quadratic that Fellingham and Fisher used, we should first check out what it looks like by simply making it non-linear.
+
+```{r}
+data28 <- list(
+  N = nrow(player_index_small),
+  n_year = n_distinct(player_index_small$yearID),
+  n_park = n_distinct(player_index_small$park_index),
+  n_player = n_distinct(player_index_small$player_index),
+  AB = player_index_small %>% pull(AB),
+  HR = player_index_small %>% pull(HR),
+  park = player_index_small %>% pull(park_index),
+  Year = player_index_small %>% pull(year_index),
+  Player = player_index_small %>% pull(player_index),
+  cAge = player_index_small %>% pull(cAge),
+  cAgeSq = (player_index_small %>% pull(cAge))**2
+)
+```
+
+```{r}
+fit28 <- stan(
+  file = "HR28.stan",
+  data = data28,
+  iter = 4000
+)
+```
+
+```{r}
+saveRDS(fit28, "HR28.rds")
+```
+
+Now we can plot to see what the effect is on the different intercepts.
+
+```{r}
+plot(fit28, pars="a")
+```
+
+Nothing really has changed here in the plot compared to the other previous ones.
+
+```{r}
+plot(fit28, pars="b")
+```
+
+```{r}
+plot(fit28, pars="c")
+```
+
+```{r}
+summary(fit28, 'beta1')$summary
+summary(fit28, 'beta2')$summary
+```
+
+We can see from these that the beta1 and beta2 are much lower than we expected with our priors. So, we can probably make their priors more confident in the remaining cubic and quadratic terms of the next model.
+
+```{r}
+data28b <- list(
+  N = nrow(player_index_small),
+  n_year = n_distinct(player_index_small$yearID),
+  n_park = n_distinct(player_index_small$park_index),
+  n_player = n_distinct(player_index_small$player_index),
+  AB = player_index_small %>% pull(AB),
+  HR = player_index_small %>% pull(HR),
+  park = player_index_small %>% pull(park_index),
+  Year = player_index_small %>% pull(year_index),
+  Player = player_index_small %>% pull(player_index),
+  cAge = player_index_small %>% pull(cAge),
+  cAgeSq = (player_index_small %>% pull(cAge))**2,
+  cAgeCb = (player_index_small %>% pull(cAge))**3
+)
+```
+
+```{r}
+fit28b <- stan(
+  file = "HR28b.stan",
+  data = data28b,
+  iter = 2000
+)
+```
+
+So that took a super long time and I was still running into the error of log(0), and that was after taking out the quadratic term.
+
+```{r}
+summary(fit28b, 'beta1')$summary
+summary(fit28b, 'beta2')$summary
+summary(fit28b, 'beta3')$summary
+```
+
+So, these are huge with big standard errors suggesting that we need more iterations.
+
+Chains aren't mixing even after 2000 iterations, it took forever to run, and the RDS is too big for GitHub to handle so I think we can chalk this up as a failure.
+
+## 10 Year Examination
+
+At the recommendation of Dr. Parson, I think that it would be really interesting to consider a 10 year sample of MLB seasons rather than just doing to the 2-year one done above. I liked how the HR27d analysis came out so we'll copy that down here.
+
+```{r}
+ten_year_batting <- Batting %>% 
+  #Consider only two years to get a managable amount of players
+  filter(yearID >= 2010 & yearID <= 2019) %>% 
+  #Number the players for the multilevel model
+  mutate(player_index = as.factor(playerID), .after = playerID) %>% 
+  mutate(player_index = as.integer(player_index)) %>% 
+  mutate(cAge = Age - 30, .after = Age) %>% 
+  mutate(year_index = yearID - min(yearID) + 1, .after = yearID) %>%
+  #For this test of conecpt we'll need to redefine the stadium's index since not all stadiums in the original dataset were used in 2018 and 2019
+  select(!park_index) %>% mutate(park = as.character(park)) %>%
+  mutate(park = as.factor(park)) %>%
+  mutate(park_index = as.integer(park), .after = park)
+```
+
+```{r}
+data29 <- list(
+  N = nrow(ten_year_batting),
+  n_year = n_distinct(ten_year_batting$yearID),
+  n_park = n_distinct(ten_year_batting$park_index),
+  n_player = n_distinct(ten_year_batting$player_index),
+  AB = ten_year_batting %>% pull(AB),
+  HR = ten_year_batting %>% pull(HR),
+  park = ten_year_batting %>% pull(park_index),
+  Year = ten_year_batting %>% pull(year_index),
+  cAge = ten_year_batting %>% pull(cAge),
+  Player = ten_year_batting %>% pull(player_index)
+)
+```
+
+```{r}
+fit29 <- stan(
+  file = "HR29.stan",
+  data = data29,
+  iter = 500
+)
+```
