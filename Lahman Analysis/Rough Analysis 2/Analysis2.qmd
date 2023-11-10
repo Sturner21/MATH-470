@@ -1179,6 +1179,87 @@ So, these are huge with big standard errors suggesting that we need more iterati
 
 Chains aren't mixing even after 2000 iterations, it took forever to run, and the RDS is too big for GitHub to handle so I think we can chalk this up as a failure.
 
+### 11/10 Meeting
+
+```{r}
+N_player <- Batting %>% 
+  distinct(playerID) %>% 
+  pull(playerID) %>% 
+  sample(size = 100, replace = FALSE)
+```
+
+```{r}
+Samp_Batting <-  Batting %>% 
+  filter(playerID %in% N_player)
+```
+
+```{r}
+Samp_Batting <- Samp_Batting %>% 
+  select(!park_index) %>% 
+  mutate(park = as.character(park)) %>% 
+  mutate(park = as.factor(park)) %>% 
+  mutate(park_index = as.integer(park), .after = park) %>% 
+  mutate(player_index = as.factor(playerID), .after = playerID) %>% 
+  mutate(player_index = as.integer(player_index))
+```
+
+```{r}
+data28aa <- list(
+  N = nrow(Samp_Batting),
+  n_player = n_distinct(Samp_Batting$player_index),
+  AB = Samp_Batting %>% pull(AB),
+  HR = Samp_Batting %>% pull(HR),
+  Player = Samp_Batting %>% pull(player_index),
+  cAge = Samp_Batting %>% pull(Age) -30
+)
+```
+
+```{r}
+fit28aa <- stan(
+  file = "HR28aa.stan",
+  data = data28aa,
+  iter = 200
+)
+```
+
+```{r}
+plot(fit28aa, pars="beta0")
+```
+
+```{r}
+plot(fit28aa, pars="beta1")
+```
+
+```{r}
+data28ab <- list(
+  N = nrow(Samp_Batting),
+  n_player = n_distinct(Samp_Batting$player_index),
+  AB = Samp_Batting %>% pull(AB),
+  HR = Samp_Batting %>% pull(HR),
+  Player = Samp_Batting %>% pull(player_index),
+  cAge = Samp_Batting %>% pull(Age) -30,
+  cAgeSq = (Samp_Batting %>% pull(Age) -30)**2
+)
+```
+
+```{r}
+fit28ab <- stan(
+  file = "HR28ab.stan",
+  data = data28ab,
+  iter = 500
+)
+```
+
+```{r}
+plot(fit28ab, pars="beta0")
+plot(fit28ab, pars = "beta1")
+plot(fit28ab, pars = "beta2")
+```
+
+Start plotting individual player's home run "trajectories" to see how the model is doing. Should be a parabola from the means of the posterior. This would show the logit of player home runs. Prefer players who have lots of seasons to start and then do it for players who have very little seasons.
+
+After, consider either more than 100 players or add in other effects like park effects.
+
 ## 10 Year Examination
 
 At the recommendation of Dr. Parson, I think that it would be really interesting to consider a 10 year sample of MLB seasons rather than just doing to the 2-year one done above. I liked how the HR27d analysis came out so we'll copy that down here.
@@ -1220,3 +1301,5 @@ fit29 <- stan(
   iter = 500
 )
 ```
+
+200 iterations took 15 minutes. So, we should wait until we have some time to render this or really try and get this to work on my PC.
