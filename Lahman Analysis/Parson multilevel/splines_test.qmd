@@ -1,0 +1,494 @@
+---
+title: "Untitled"
+format: html
+editor: visual
+---
+
+In this document, we demonstrate fitting polynomial and splines models for home-run probability using age as predictor. Our purpose is to demonstrate how to use `poly` with orthogonal polynomials and how to use `bs` for B-splines.
+
+# Load packages and Lahman data
+
+```{r}
+#| warning: false
+library(tidyverse)
+library(rstan)
+library(bayesplot)
+library(Lahman)
+library(splines)
+```
+
+```{r}
+options(mc.cores = parallel::detectCores())
+rstan_options(auto_write = TRUE)
+```
+
+We'll load the data here to match Fellingham and Fisher:
+
+-   Players with at least 6 seasons and 50 at-bats each season.
+
+-   Cut off seasons at age 45.
+
+-   Fellingham and Fisher consider seasons from 1871 to 2008. We'll look at 1973 - 2019.
+
+```{r}
+#| message: false
+
+#Creates a DF called "Batting" which has players stats from 1973-2019
+
+#Load the DF's from Lahman directly
+Batting <- Lahman::Batting
+Teams <- Lahman::Teams
+People <- Lahman::People
+
+Batting <- Batting %>% 
+  #Minimum year = DH was introduced; maximum year = before COVID
+  filter(yearID >= 1973 & yearID <= 2019)
+
+#Filter teams for years considered and select only necessary columns
+Teams <- Teams %>% 
+  filter(yearID>=1973 & yearID <= 2019) %>% 
+  select(yearID, teamID, park)
+
+#Combine current "Batting" and "Teams" DF to associate player with stadium played at
+Batting <- Batting %>% 
+  right_join(Teams, by = join_by(yearID, teamID))
+
+#Add player's age to the "Batting" DF and remove seasons with age > 45
+Batting <- Batting %>% 
+  right_join(Lahman::People, by = join_by(playerID)) %>% 
+  mutate(Age = yearID - birthYear, .after=yearID) %>%
+  #Don't consider the people who don't have a birthday in the database
+  drop_na(Age) %>% filter(Age <= 44)
+
+#Make the lgID variable into an index variable
+Batting <- Batting %>% 
+  mutate(lg = case_when(lgID == "NL" ~ 1,
+                        lgID == "AL" ~ 2), .after=lgID)
+
+players <- Batting %>% group_by(playerID, Age) %>%
+  summarize(AB = sum(AB),
+            HR = sum(HR)) %>% group_by(playerID) %>%
+  filter(min(AB) >= 50, n() >= 6) %>% ungroup
+```
+
+```{r}
+logit <- function(p){
+  log(p / (1 - p))
+}
+```
+
+```{r}
+Samp_Batting <-  players %>% 
+  select(AB, HR, Age) %>% group_by(Age) %>%
+  summarize(AB = sum(AB), HR = sum(HR)) %>%
+  mutate(not_HR = AB - HR, p = HR / AB, lp = logit(p))
+
+ages <- seq(19, 44)
+```
+
+# Polynomial model
+
+We start with a polynomial model for the home-run probability. To illustrate how the `poly` command (a shortcut that also gives us access to orthogonal polynomials) works, we start with a classical model and move on later to a Bayesian model.
+
+## Fitting a quartic model by hand
+
+We begin with a quartic model, fitting it as we would have in MATH 313.
+
+In the formula in the `glm` command below, we include the constant term `1 +` explicitly, even though it is not necessary. Since we have to include it when we write Stan code for our models, it may be helpful to see it in the classical models as well.
+
+```{r}
+fit1_poly <- glm(cbind(HR, not_HR) ~ 1 + Age + I(Age^2) + I(Age^3) + I(Age^4),
+                 family = "binomial",
+                 data = Samp_Batting)
+
+summary(fit1_poly)
+
+```
+
+We can graph the fitted model as follows. In this graph---and in the other graphs of binomial logistic models---I add a scatterplot of empirical logits to help us assess the fit. This fit does not look bad, especially for players under 40. It suggests that, on average, players in this group had their highest home-run probabilities (about 3.3%) around age 30. The home run probabilities in the fitted model increase quickly among younger players from about 2.2% at age 19 to a maximum around age 30 and then decline gradually after 30, reaching about 2.8% at age 40.
+
+```{r}
+ggplot() +
+  geom_line(mapping = aes(x = ages,
+                           y = fit1_poly$coefficients[1] +
+                            fit1_poly$coefficients[2] * ages +
+                            fit1_poly$coefficients[3] * ages^2 +
+                            fit1_poly$coefficients[4] * ages^3 +
+                            fit1_poly$coefficients[5] * ages^4)
+             ) +
+  geom_point(data = Samp_Batting, mapping = aes(x = Age, y = lp)) +
+  labs(x = "Age",
+       y = "log odds of HR",
+       title = "Quartic model fit by hand")
+```
+
+## Fitting a quartic model with `poly` (raw polynomial)
+
+The following chunk fits the model using `poly`, which automates the cubic regression that we set up by hand above. As when we set the model up by hand, we include the explicit constant term `1 +`, since we will need to include it in our Stan code later. Note that the coefficients and standard errors in this model are identical to the coefficients and standard errors in the model that we fit by hand.
+
+```{r}
+fit2_poly <- glm(cbind(HR, not_HR) ~ 1 + poly(Age, degree = 4, raw = T),
+                 family = "binomial",
+                 data = Samp_Batting)
+
+summary(fit2_poly)
+```
+
+We graph the model that we fit using `poly` with the following code. It is the same as the model that we fit by hand!
+
+```{r}
+B_raw <- poly(Samp_Batting$Age, degree = 4, raw = T)
+
+# Add a column at the start for intercept. Probably a better way to do this!
+
+C_raw <- rep(1, length(ages)) %>% cbind(B_raw %>% predict(newdata = ages))
+
+ggplot() +
+  geom_line(mapping = aes(x = ages,
+                          y = C_raw %*% fit2_poly$coefficients)) +
+  geom_point(data = Samp_Batting, mapping = aes(x = Age, y = lp)) +
+  labs(x = "Age",
+       y = "log odds of HR",
+       title = "Quartic model fit with poly (raw terms)")
+```
+
+### How does `poly` work?
+
+Let's look at the matrix `B_raw` that `poly` constructs:
+
+```{r}
+B_raw
+```
+
+Each row has the form `Age Age^2 Age^3 Age^4`, where `Age` is one of the ages (ranging from 19 to 44) from our data. We add a column of 1s at the start to make `C_raw`:
+
+```{r}
+C_raw
+```
+
+When I made `C_raw`, I did something mysterious with `predict`. That step is not really necessary here. I will come back to it later!
+
+To use `C_raw`, we multiply it by a column vector of length 5. If that vector is `c(w1, w2, w3, w4, w5)`, we get a new column vector of length 26 whose entries are `w1 + w2*Age + w3*Age^2 + w4 * Age^3 + w5 * Age^4`, where `Age` runs from 19 to 44. The entries of that vector are the predicted ages for the quartic model with coefficients `w1, w2, w3, w4, w5`.
+
+In particular, to see the predictions (of logit probability of home runs) for the fitted model, we multiply by `c(-9.70, 0.629, -0.0234, 0.000398, -0.00000272)`
+
+## Fitting a quartic model with `poly` (orthogonal)
+
+We can also fit a model using "orthogonal polynomials" customized to our predictor `Age`. Before fitting the model, let me show you how those polynomials look. The following chunk graphs the five special polynomials that we use for our quartic model. The first polynomial is just the constant function `f0(x) = 1`. We also have a linear polynomial `f1(x)`, quadratic polynomial `f2(x)`, cubic polynomial `f3(x)`, and quartic polynomial `f4(x)`. We use these four polynomials in place of `x`, `x^2`, `x^3`, and `x^4`, which are what we used when fitting a quartic polynomial by hand and using `poly` with the `raw = TRUE` option.
+
+The "orthogonality" property of these new polynomials includes a sort of centering and some normalization. The four polynomials all have about the same magnitude on the interval \[19, 44\] of ages that we consider. This is a big contrast with how the "raw" polynomials `x`, `x^2`, `x^3`, and `x^4` behave on that interval. Using orthogonal polynomials in the Bayesian setting may make it easier to set priors.
+
+```{r}
+ages_fine <- seq(19, 44, by = 0.1)
+
+B_ortho <- poly(Samp_Batting$Age, degree = 4)
+
+C_ortho <- cbind("0" = rep(1, length(ages_fine)),
+                     B_ortho %>% predict(newdata = ages_fine))
+
+ggplot(mapping = aes(x = ages_fine)) +
+  geom_line(mapping = aes(y = C_ortho[, 1])) +
+    geom_line(mapping = aes(y = C_ortho[, 2])) +
+    geom_line(mapping = aes(y = C_ortho[, 3])) +
+    geom_line(mapping = aes(y = C_ortho[, 4])) +
+    geom_line(mapping = aes(y = C_ortho[, 5])) +
+  labs(y = "", x = "Age", title = "Five orthogonal polynomials for Age")
+```
+
+We next fit a polynomial regression using these polynomials. The regression is looking for the choices of weights `w0`, `w1`, `w2`, `w3`, `w4` so that the polynomial function `w0 + w1 * f1(x) + w2 * f2(x) + w3 * f3(x) + w4 * f4(x)` gives the best fit (maximum likelihood) for our binomial logistic model.
+
+As above, we include the explicit constant term `1 +` to prepare ourselves for writing Stan code later.
+
+```{r}
+fit3_poly <- glm(cbind(HR, not_HR) ~ 1 + poly(Age, degree = 4),
+                 family = "binomial",
+                 data = Samp_Batting)
+
+summary(fit3_poly)
+```
+
+We can graph this model as well. It matches what we found when we fit the binomial model in the two other ways! In other words, if we looked up the formulas for the four orthogonal polynomials `f1(x)`, `f2(x)`, `f3(x)`, `f4(x)` and used them to expand the model function `w0 + w1 * f1(x) + w2 * f2(x) + w3 * f3(x) + w4 * f4(x)` in powers of `x`, we would get exactly the same polynomial in `x` as in our earlier model.
+
+```{r}
+B_ortho <- poly(Samp_Batting$Age, degree = 4)
+
+C_ortho <- cbind("0" = rep(1, length(ages)),
+                     B_ortho %>% predict(newdata = ages))
+
+ggplot() +
+  geom_line(mapping = aes(x = ages,
+                          y = C_ortho %*% fit3_poly$coefficients))  +
+  geom_point(data = Samp_Batting, mapping = aes(x = Age, y = lp)) +
+  labs(x = "Age",
+       y = "log odds of HR",
+       title = "Quartic model fit with orthogonal polynomials")
+```
+
+### Orthogonal polynomials and Stan
+
+The othogonalization process that `poly` uses is a general method that could be applied to any collection of predictors. In a somewhat puzzling section, in fact, the Stan user's guide recommends this step as a standard part of processing before fitting a model. The discussion and sample code are in Section 1.2 \[<https://mc-stan.org/docs/stan-users-guide/QR-reparameterization.html>\], with the title "QR reparameterization." One might consider using that code as a replacement for pre-processing with `poly`.
+
+# Spline fit
+
+We learned about B-splines in Chapter 4 of *Statistical Rethinking*. We can use B-splines in place of a quartic polynomial model. In this case, the quartic model actually looks fine (to me at least!), but perhaps it's worth comparing with splines when one passes to Bayesian multilevel models.
+
+We will try a more-complex spline model than our quartic models above. Those quartic models have 5 degrees of freedom, in the sense that there are 5 coefficients to fit in the model. We will fit a B-spline with 8 degrees of freedom (`df = 8` as an option in `bs`) plus 1 degree of freedom for a constant term. I picked 8 by stepping up from 5 degrees of freedom until the spline model looked like a very good fit---maybe an overfit!---for the empirical logits.
+
+Before we fit the model, let's see how this spline basis looks. The `bs` command, which was saw in *Statistical Rethinking*, picks the knots using quantiles of `Age` when I tell it the number of degrees of freedom that I want (8) and the degree of the spline functions (3 for cubic splines, which are a standard choice). We add the constant function `1` to this B-spline basis.
+
+An aside about the knots determined by `bs`: this R command just uses the list of ages, which run from 19 to 44, to determine the knots. It might be better to weight the ages by, say, the number of at-bats in our data set for each age or by the number of player-seasons of each age. If we did that, the knots would no longer be evenly spaced. We would have greater resolution at the ages that are more common in the data. I tried fitting splines using knots determined by the quantiles of ages weighted in this way, and it did not appear to make much of a difference. To keep things simple in this file, I discarded that work.
+
+```{r}
+ages_fine <- seq(19, 44, by = 0.1)
+
+B_spline <- bs(Samp_Batting %>% pull(Age), df = 8, degree = 3)
+
+C_spline <- rep(1, length(ages_fine)) %>%
+  cbind(B_spline %>% predict(newx = ages_fine))
+
+ggplot(mapping = aes(x = ages_fine)) +
+  geom_line(mapping = aes(y = C_spline[, 1])) +
+  geom_line(mapping = aes(y = C_spline[, 2])) +
+  geom_line(mapping = aes(y = C_spline[, 3])) +
+  geom_line(mapping = aes(y = C_spline[, 4])) +
+  geom_line(mapping = aes(y = C_spline[, 5])) +
+  geom_line(mapping = aes(y = C_spline[, 6])) +
+  geom_line(mapping = aes(y = C_spline[, 7])) +
+  geom_line(mapping = aes(y = C_spline[, 8])) +
+  geom_line(mapping = aes(y = C_spline[, 9])) +
+  labs(y = "", x = "Age", title = "B-splines for Age with df = 8 and constant")
+```
+
+## Aside on intercept
+
+McElreath first fits a B-spline model using the option `intercept = TRUE`. I'm not convinced that he understands what that option does! Let's add that option and graph the resulting splines, omitting the constant function. We have to add one more degree of freedom for `bs`, since with this option, we do not need a separate intercept term in a spline model.
+
+When we compare the graph of these nine spline functions with the graph of the eight spline functions above, we can see what is going on. With the default `intercept = FALSE` option, R drops the first B-spline from the set.
+
+```{r}
+ages_fine <- seq(19, 44, by = 0.1)
+
+B_spline_int <- bs(Samp_Batting %>% pull(Age), df = 8 + 1,
+               degree = 3, intercept = TRUE)
+
+C_spline <- B_spline_int %>% predict(newx = ages_fine)
+
+ggplot(mapping = aes(x = ages_fine)) +
+  geom_line(mapping = aes(y = C_spline[, 1])) +
+  geom_line(mapping = aes(y = C_spline[, 2])) +
+  geom_line(mapping = aes(y = C_spline[, 3])) +
+  geom_line(mapping = aes(y = C_spline[, 4])) +
+  geom_line(mapping = aes(y = C_spline[, 5])) +
+  geom_line(mapping = aes(y = C_spline[, 6])) +
+  geom_line(mapping = aes(y = C_spline[, 7])) +
+  geom_line(mapping = aes(y = C_spline[, 8])) +
+  geom_line(mapping = aes(y = C_spline[, 9])) +
+  labs(y = "", x = "Age",
+       title = "B-splines for Age with df = 8 + 1 and `intercept = T`")
+```
+
+None of these spline basis functions looks like the constant function 1, which is what we normally think of as an intercept term. If we sum those 9 functions though, we get the constant 1, as the following chunk confirms.
+
+```{r}
+rowSums(B_spline_int)
+```
+
+We will compare below the coefficients for fitting a spline model with `intercept = FALSE` and `intercept = TRUE`.
+
+In the classical context, the default is `intercept = FALSE`, since one may want to use splines for several predictor variables. If one used `intercept = TRUE` for splines for more than one predictor, one would run into a multicollinearity problem. In the Bayesian setting, one could work around that using priors, as we've seen in other situations. There may be an argument for using `intercept = TRUE` in that setting, especially if it makes working with the priors easier. McElreath's argument from symmetry for not using classical dummy coding in the Bayesian setting may also apply here (in favor of `intercept = TRUE`). One may have to experiment further to figure out how these things work...
+
+## Fitting the B-spline model(s)
+
+We next fit a regression using spline functions as above. We first use the default `intercept = FALSE` option and include a constant term in our model. We then fit a model using `intercept = TRUE` and remove the constant term.
+
+```{r}
+fit1_spline <- glm(cbind(HR, not_HR) ~ 1 + bs(Age, df = 8, degree = 3),
+                 family = "binomial",
+                 data = Samp_Batting)
+
+summary(fit1_spline)
+```
+
+```{r}
+fit2_spline <- glm(cbind(HR, not_HR) ~ bs(Age, df = 8 + 1, degree = 3,
+                                              intercept = TRUE) - 1,
+                 family = "binomial",
+                 data = Samp_Batting)
+
+summary(fit2_spline)
+```
+
+We'll confirm below that these two versions of the spline models give the same fitted function. Comparing the coefficients lists shows a simple relation, which follows from the fact that in the `intercept = TRUE` model, the splines functions sum to the constant 1:
+
+-   The intercept coefficient in the first model is the same as the coefficient for the first spline basis element in the second model. It matches the model prediction for the log odds of a home run for a 19-year-old player. That's clear from the graphs of the spline functions. The only functions in those graphs that do not vanish at age 19 are the constant function 1 and the first spline basis function in the `intercept = TRUE` set. (We can also verify this below with an R calculation.)
+
+-   The coefficients in the first model are the differences between the first coefficient in the second model and the later coefficients. For example, the sixth coefficient in the first model is 0.4311. This number is the difference -3.42470 - (-3.85579) between the sixth and first coefficients in the second model.
+
+-   The coefficients in the second model are roughly the sizes of predicted log odds as we move across the range of ages. The coefficients in the first model are comparisons as we move across the range of ages to the log odds for a home run for 19-year-old players.
+
+We verify that the first coefficient in both models is the predicted log odds of a home run for a 19-year-old player.
+
+```{r}
+fit1_spline %>% predict(newdata = data.frame(Age = 19))
+```
+
+```{r}
+fit2_spline %>% predict(newdata = data.frame(Age = 19))
+```
+
+```{r}
+fit1_spline$coefficients[1]
+```
+
+If we were in the Bayesian setting, we could add an intercept term to the `intercept = TRUE` model and use priors to make the model treat that intercept as the overall average and the spline coefficients as smaller age adjustments to that overall average. That is what McElreath is doing, I believe, in Chapter 4, but, as I mentioned above, I am not sure that he understands the options for `bs`.
+
+Let's convince ourselves with a graph that these two models do the same thing.
+
+```{r}
+B_spline <- bs(Samp_Batting %>% pull(Age), df = 8, degree = 3)
+
+C_spline <- rep(1, length(ages)) %>%
+  cbind(B_spline %>% predict(newx = ages))
+
+ggplot() +
+  geom_line(mapping = aes(x = ages,
+                          y = C_spline %*% fit1_spline$coefficients))  +
+  geom_point(data = Samp_Batting, mapping = aes(x = Age, y = lp)) +
+  labs(x = "Age",
+       y = "log odds of HR",
+       title = "Cubic spline model intercept = FALSE")
+```
+
+```{r}
+B_spline_int <- bs(Samp_Batting %>% pull(Age), df = 8 + 1, degree = 3,
+               intercept = TRUE)
+
+C_spline_int <- B_spline_int %>% predict(newx = ages)
+
+ggplot() +
+  geom_line(mapping = aes(x = ages,
+                          y = C_spline_int %*% fit2_spline$coefficients))  +
+  geom_point(data = Samp_Batting, mapping = aes(x = Age, y = lp)) +
+  labs(x = "Age",
+       y = "log odds of HR",
+       title = "Cubic spline model intercept = TRUE")
+```
+
+## How does `bs` work?
+
+The `bs` command works just like the `poly` command. It creates a matrix ("design matrix") with as many columns as there are coefficients and as many rows as there are rows in the data set. Each row has the values of the spline basis for the corresponding row of the data set. Since we only use `Age` as the predictor, the rows are functions of `Age`.
+
+As with `poly`, when we multiply the spline matrix by the vector of coefficients, we get a column vector of predictions for log odds of a home run for each row (case) in the original data set. (If we are using the `intercept = FALSE` version, we have to add a column of 1s at the left edge of the spline matrix to provide the intercept term.) For this work, the rows of our data set correspond to the ages 19 through 44, and so this column vector gives the predicted log odds for each age.
+
+# Modeling with Stan
+
+We next explore fitting these sorts of models with Stan.
+
+## Fully pooled models
+
+We can refit any of the above fully pooled models in Bayesian style using Stan. Let's try, for example, the degree-4 orthogonal polynomial fit. I called my Stan file `spline_model1.stan`, since I first thought to use it for fitting a B-spline model. The code is quite general, just using a design matrix (the `B`-type matrix from above) and adding an intercept. One would want to adjust the priors appropriately for different sorts of models.
+
+```{r}
+B_ortho <- poly(Samp_Batting %>% pull(Age), degree = 4)
+
+data_ortho <- list(
+  N = nrow(Samp_Batting),
+  n_basis = ncol(B_ortho),
+  AB = Samp_Batting %>% pull(AB),
+  HR = Samp_Batting %>% pull(HR),
+  B = B_ortho
+)
+
+fit_ortho <- stan(
+  file = "spline_model1.stan",
+  data = data_ortho,
+  iter = 500
+)
+```
+
+As we see below, the model parameters and standard errors in the Bayesian setting match those in the classical setting.
+
+```{r}
+print(fit_ortho)
+```
+
+We can get a sense for the model probabilities by drawing some samples (say, 50) of the parameters from the posterior and graphing the models' log odds values as functions of age.
+
+```{r}
+samples <- as.data.frame(fit_ortho) %>% slice_sample(n = 50) %>% select(-"lp__")
+ms <- C_ortho %*% t(as.matrix(samples)) %>% as.data.frame() %>%
+  mutate(Age = ages) %>%
+  pivot_longer(cols = -Age, names_to = "group", values_to = "predicted")
+
+ggplot(data = ms) +
+  geom_line(mapping = aes(x = Age, y = predicted, group = group),
+            alpha = 0.1) +
+  geom_point(data = Samp_Batting, mapping = aes(x = Age, y = lp)) +
+  labs(x = "Age",
+       y = "log odds of HR",
+       title = "Quartic model fit with orthogonal polynomials")
+```
+
+To evaluate how well the model fits (retrodicts!) the original data set, we could use a diagnostic graph such as binned residual plots. (But we would not need to bin.) I have already gotten carried away, and so I'll omit such graphs from this file. (If we were to make one, we might calculate residuals for a single draw from the posterior, since residuals are parameters in the Bayesian setting!)
+
+## Multilevel models (partial pooling)
+
+We can now fit a multilevel model, using a quartic polynomial for each player but with coefficients drawn from a common distribution. Warning: Fitting the model with only 200 iterations took about 15 minutes. Stan complained mightily about convergence problems.
+
+This work is a start. One could pull a few players (in the style of Fellingham and Fisher) to look at how the model fits the data. I think the model imposed pretty strong pooling on the coefficients.
+
+```{r}
+player_IDs <- players %>% distinct(playerID) %>% pull(playerID)
+
+batting_full <- Batting %>% filter(playerID %in% player_IDs) %>%
+  select(AB, HR, Age, playerID) %>% group_by(playerID, Age) %>%
+  summarize(AB = sum(AB), HR = sum(HR)) %>% ungroup
+```
+
+```{r}
+B_ortho_full <- poly(batting_full %>% pull(Age), degree = 4)
+
+data_ortho_full <- list(
+  N = nrow(batting_full),
+  n_player = length(player_IDs),
+  n_basis = ncol(B_ortho_full),
+  AB = batting_full %>% pull(AB),
+  HR = batting_full %>% pull(HR),
+  Player = batting_full %>% pull(playerID) %>% factor %>% as.integer,
+  B = B_ortho_full
+)
+
+fit_ortho_full <- stan(
+  file = "spline_model2.stan",
+  data = data_ortho_full,
+  iter = 200
+)
+```
+
+Poking around, I see that the parameters are different from what I guessed with my priors. The fitted values for the weights vary between around -20 and 20, much wider than what my priors suggested. There was enough data to swamp those priors.
+
+The overall model (determined by using `mu` for the intercept and `nu` for the weights) looks like the quartic model that I fit to the pooled data. Picking a couple of players, I see that the individual models do look different from this overall model. The individual models, for example, may predict later peaks for home-run probability. To explore further, I would add empirical logits to the graphs. Not sure what to expect!
+
+```{r}
+print(fit_ortho_full, pars = "weight")
+```
+
+```{r}
+print(fit_ortho_full, pars = "a")
+```
+
+```{r}
+print(fit_ortho_full, pars = "sigma")
+```
+
+```{r}
+print(fit_ortho_full, pars = "tau")
+```
+
+```{r}
+print(fit_ortho_full, pars = "nu")
+```
+
+```{r}
+print(fit_ortho_full, pars = "mu")
+```
