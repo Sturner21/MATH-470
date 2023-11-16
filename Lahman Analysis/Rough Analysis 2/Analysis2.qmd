@@ -1182,6 +1182,10 @@ Chains aren't mixing even after 2000 iterations, it took forever to run, and the
 ### 11/10 Meeting
 
 ```{r}
+#Set the seed since the players chosen keep changing
+set.seed(300)
+
+
 N_player <- Batting %>% 
   distinct(playerID) %>% 
   pull(playerID) %>% 
@@ -1246,7 +1250,7 @@ data28ab <- list(
 fit28ab <- stan(
   file = "HR28ab.stan",
   data = data28ab,
-  iter = 500
+  iter = 1000
 )
 ```
 
@@ -1259,6 +1263,118 @@ plot(fit28ab, pars = "beta2")
 Start plotting individual player's home run "trajectories" to see how the model is doing. Should be a parabola from the means of the posterior. This would show the logit of player home runs. Prefer players who have lots of seasons to start and then do it for players who have very little seasons.
 
 After, consider either more than 100 players or add in other effects like park effects.
+
+### Modeling Player "Trajectories" From Model Prediction
+
+Followed [this vignette](http://mjskay.github.io/tidybayes/articles/tidy-rstanarm.html) from tidybayes.
+
+```{r}
+#Start by installing tidybayes
+
+#This shows us what the variables are called in the model (we already know this from the stan code)
+get_variables(fit28ab)
+```
+
+```{r}
+#Grabs the beta1's from the model and shows first 10
+fit28ab %>% 
+  spread_draws(beta1[group]) %>% 
+  head(10)
+```
+
+```{r}
+#Shows the first 10 beta1's again but also gives medians
+fit28ab %>% 
+  spread_draws(beta1[group]) %>% 
+  median_qi() %>% 
+  head(10)
+```
+
+```{r}
+#Gives us a tidy df of all the outputs from when we print a model fit for a specific parameter
+fit28ab %>% 
+  spread_draws(beta1[group]) %>% 
+  summarise_draws()
+```
+
+```{r}
+#Though ugly, this output should be replicating the beta1 graph above.
+fit28ab %>%
+  spread_draws(beta1[group]) %>%
+  median_qi(.width = c(.95, .8)) %>%
+  ggplot(aes(y = group, x = beta1, xmin = .lower, xmax = .upper)) +
+  geom_pointinterval()
+```
+
+```{r}
+#Note: in the vingette, condition=HR for us and ABC=Samp_Batting
+Samp_Batting %>%
+  modelr::data_grid(HR) %>%
+  add_epred_draws(fit28ab) %>%
+  head(10)
+```
+
+```{r}
+grid = Samp_Batting %>% 
+  modelr::data_grid(HR)
+
+means = grid %>% 
+  add_epred_draws(fit28ab)
+```
+
+I'm getting som errors here, so I'm going to take a break from trying to use tidybayes and give this a go another way.
+
+We takled in the meeting on 11/10 about picking a player who had a lot of seasons so we could see how their trajectory looked over the course of their long career. Selecting arbitrarily, playerID "bayja01" played from 2003-2013. So a nice 11 year long career. (His index is 9)
+
+```{r}
+#Grab player 9's estimates for beta0, beta1, and beta2
+b0_i9 <- fit28ab %>% 
+  spread_draws(beta0[group]) %>% 
+  summarise_draws() %>% 
+  filter(group == 9)
+
+b1_i9 <- fit28ab %>% 
+  spread_draws(beta1[group]) %>% 
+  summarise_draws() %>% 
+  filter(group == 9)
+
+b2_i9 <- fit28ab %>% 
+  spread_draws(beta2[group]) %>% 
+  summarise_draws() %>% 
+  filter(group == 9)
+
+b0_i9
+b1_i9
+b2_i9
+```
+
+```{r}
+#Combine these into one tibble
+player_9_est <- b0_i9 %>% 
+  bind_rows(b1_i9, b2_i9)
+```
+
+```{r}
+#We want to plot this guy's fit compared to how he actually did
+player_9_Samp_Batting <- Samp_Batting %>% 
+  filter(player_index==9) %>% 
+  select(playerID, player_index, yearID, Age, AB, HR) %>% 
+  mutate(cAge = Age - 30, .after = Age)
+  mutate(p = HR / AB) %>% 
+  mutate(p_logit = log(p / (1-p)))
+```
+
+```{r}
+ggplot(data = player_9_Samp_Batting)+ 
+  aes(x = cAge, y=p_logit)+
+  geom_point()+
+  geom_function(fun = function(x) (-2.962388)	+ (-0.0443416*x) + (-0.004696772*(x**2)), color="red")
+```
+
+\
+\
+\
+\
 
 ## 10 Year Examination
 
