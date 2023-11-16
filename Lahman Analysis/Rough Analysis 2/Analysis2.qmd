@@ -11,6 +11,7 @@ library(tidyverse)
 library(rstan)
 library(bayesplot)
 library(Lahman)
+library(tidybayes)
 ```
 
 ```{r}
@@ -1322,56 +1323,68 @@ means = grid %>%
   add_epred_draws(fit28ab)
 ```
 
-I'm getting som errors here, so I'm going to take a break from trying to use tidybayes and give this a go another way.
+I'm getting some errors here, so I'm going to take a break from trying to use tidybayes and give this a go another way.
 
-We takled in the meeting on 11/10 about picking a player who had a lot of seasons so we could see how their trajectory looked over the course of their long career. Selecting arbitrarily, playerID "bayja01" played from 2003-2013. So a nice 11 year long career. (His index is 9)
+We talked in the meeting on 11/10 about picking a player who had a lot of seasons so we could see how their trajectory looked over the course of their long career. Selecting arbitrarily, playerID "jenkige01" played from 2003-2013. So a nice 11 year long career. (His index is 46)
 
 ```{r}
 #Grab player 9's estimates for beta0, beta1, and beta2
-b0_i9 <- fit28ab %>% 
+b0_i46 <- fit28ab %>% 
   spread_draws(beta0[group]) %>% 
   summarise_draws() %>% 
-  filter(group == 9)
+  filter(group == 46)
 
-b1_i9 <- fit28ab %>% 
+b1_i46 <- fit28ab %>% 
   spread_draws(beta1[group]) %>% 
   summarise_draws() %>% 
-  filter(group == 9)
+  filter(group == 46)
 
-b2_i9 <- fit28ab %>% 
+b2_i46 <- fit28ab %>% 
   spread_draws(beta2[group]) %>% 
   summarise_draws() %>% 
-  filter(group == 9)
+  filter(group == 46)
 
-b0_i9
-b1_i9
-b2_i9
+b0_i46
+b1_i46
+b2_i46
 ```
 
 ```{r}
 #Combine these into one tibble
-player_9_est <- b0_i9 %>% 
-  bind_rows(b1_i9, b2_i9)
+player_46_est <- b0_i46 %>% 
+  bind_rows(b1_i46, b2_i46)
 ```
 
 ```{r}
 #We want to plot this guy's fit compared to how he actually did
-player_9_Samp_Batting <- Samp_Batting %>% 
-  filter(player_index==9) %>% 
+player_46_Samp_Batting <- Samp_Batting %>% 
+  filter(player_index==46) %>% 
   select(playerID, player_index, yearID, Age, AB, HR) %>% 
-  mutate(cAge = Age - 30, .after = Age)
+  mutate(cAge = Age - 30, .after = Age) %>% 
   mutate(p = HR / AB) %>% 
   mutate(p_logit = log(p / (1-p)))
 ```
 
 ```{r}
-ggplot(data = player_9_Samp_Batting)+ 
+#This plot shows us how he actually did with the black points compared to how we would predict him to do, the red line
+ggplot(data = player_46_Samp_Batting)+ 
   aes(x = cAge, y=p_logit)+
   geom_point()+
-  geom_function(fun = function(x) (-2.962388)	+ (-0.0443416*x) + (-0.004696772*(x**2)), color="red")
+  geom_function(fun = function(x) (-2.967667)	+ (-0.0481313*x) + (-0.00995784*(x**2)), color="red")
 ```
 
-\
+```{r}
+#Extending the x-axis we can see how our model would predict him to do from the ages of 20-40 even though he only played from when he was 24-34.
+ggplot(data = player_46_Samp_Batting)+ 
+  aes(x = cAge, y=p_logit)+
+  geom_point()+
+  geom_function(fun = function(x) (-2.967667)	+ (-0.0481313*x) + (-0.00995784*(x**2)), color="red")+
+  xlim(-10, 10)
+```
+
+It is difficult to tell what the logit scale means, so in terms of probability, -3.5 would be about 3%. So, we would predict him to be an average home run hitter when he entered the league at 20. Then it peaks around -2.85 which is about 5.5%. And then when he's 40 he has an expected home run rate of -4.5 which is about 1.1%.
+
+This outlines the (somewhat laborious) process of how to extrapolate predictions from our model for specific players. Thus, I think the next thing to do would be to add in different factors, like park and year factors since I believe that they would give our model the strongest edge. I will do this on a new document though because this one is getting unwieldy.\
 \
 \
 \
