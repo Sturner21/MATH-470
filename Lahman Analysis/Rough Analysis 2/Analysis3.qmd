@@ -4,3 +4,237 @@ format: html
 ---
 
 # Load Libraries
+
+```{r}
+#| warning: false
+library(tidyverse)
+library(rstan)
+library(bayesplot)
+library(Lahman)
+library(tidybayes)
+```
+
+```{r}
+options(mc.cores = parallel::detectCores())
+rstan_options(auto_write = TRUE)
+```
+
+# Clean Lahman
+
+```{r}
+#| message: false
+
+#Creates a DF called "Batting" which has players stats from 1973-2019
+
+#Load the DF's from Lahman directly
+Batting <- Lahman::Batting
+Teams <- Lahman::Teams
+People <- Lahman::People
+
+Batting <- Batting %>% 
+  #Minimum year = DH was introduced; maximum year = before COVID
+  filter(yearID >= 1973 & yearID <= 2019)
+
+#Filter teams for years considered and select only necessary columns
+Teams <- Teams %>% 
+  filter(yearID>=1973 & yearID <= 2019) %>% 
+  select(yearID, teamID, park)
+
+#Combine current "Batting" and "Teams" DF to associate player with stadium played at
+Batting <- Batting %>% 
+  right_join(Teams, by = join_by(yearID, teamID))
+
+#Add player's age to the "Batting" DF
+Batting <- Batting %>% 
+  right_join(Lahman::People, by = join_by(playerID)) %>% 
+  mutate(Age = yearID - birthYear, .after=yearID) %>%
+  #Don't consider the people who don't have a birthday in the database
+  drop_na(Age)
+
+#Make the lgID variable into an index variable
+Batting <- Batting %>% 
+  mutate(lg = case_when(lgID == "NL" ~ 1,
+                        lgID == "AL" ~ 2), .after=lgID)
+```
+
+```{r}
+#We need to make the data here "slim" like is suggested by McElreath
+slim <- list(
+  N = nrow(Batting),
+  z = n_distinct(Batting %>% pull(yearID)),
+  Year = as.integer(Batting %>% pull(yearID) - 1972),
+  Age = as.integer(Batting %>% pull(Age)-17),
+  LG = as.integer(Batting %>% pull(lg)),
+  AB = Batting %>% pull(AB),
+  HR = Batting %>% pull(HR),
+  SB = Batting %>% pull(SB),
+  BirthYear = as.integer(Batting %>% pull(birthYear)-1922)
+)
+```
+
+```{r}
+#Define logit for convenience
+
+inv_logit <- function(p){
+  1 / (1 + exp(-p))
+}
+```
+
+```{r}
+#Create the summarized data frame
+
+Sum.Batting <- Batting %>% 
+  group_by(yearID, Age) %>% 
+  summarize(AB = sum(AB),
+            HR = sum(HR))
+```
+
+```{r}
+#Make an index for the parks to add them to the model
+
+#The index goes from 1-88. No idea how it came up with them but I kept the park name in Batting so anyone should be able to reference to see how the parks impact player performance
+
+Batting <- Batting %>% 
+  mutate(park = as.factor(park)) %>% 
+  mutate(park_index = as.integer(park), .after = park)
+```
+
+```{r}
+#Create a column which described the decade a player was born in
+
+Batting %>% 
+  #Put the birth year down to the decade value. (i.e. 1936 becomes 193.6)
+  #Then force it to be an integer. R doesn't round so we are left with (1936=193) a decade
+  mutate(birthDecade = as.integer(birthYear/10), .before=birthYear) %>% 
+  #Then, index it by making the minimum year equal to 1
+  mutate(birthDecade = birthDecade - min(birthDecade) + 1)
+```
+
+# Player Trajectories
+
+This is a continuation of where I left off `Analysis 2` because the document was getting unwieldy. When we left off, we were able to model the career HR probability of a certain player and extrapolate that to consider what his HR's would have looked like if he had played from 20-40 years-old.
+
+That model was a very simple multilevel model and is outlined below. In this part we seek to consider more factors to make our model more refined. Mainly, we seek to consider things such as park factors, year played, and putting higher order polynomials to better model the non-linear effect of age.
+
+Our current model as of starting this document:
+
+$$
+HR\sim Binomial(AB, p)\\
+p=\beta_0+\beta_1\cdot CenteredAge+\beta_2\cdot(CenteredAge)^2\\
+\beta_0\sim Normal(\mu_0,\sigma_0)\\
+\beta_1\sim Normal(\mu_1,\sigma_1)\\
+\beta_2\sim Normal(\mu_2,\sigma_2)\\
+\mu_0\sim Normal(-3.5, 0.1)\\
+\sigma_0\sim Exponential(1)\\
+\mu_1\sim Normal(0, 0.1)\\
+\sigma_1\sim Exponential(10)\\
+\mu_2\sim Normal(0, 0.01)\\
+\sigma_2\sim Exponential(100)
+$$
+
+## Clean Random Sample
+
+We need to clean the random sample of 100 considered players in this smaller model.
+
+```{r}
+#Set a seed so that we don't keep grabbing random 100 players whenever this chunk re-runs
+set.seed(400)
+
+#Grab 100 random playerID's from our Batting df
+N_player <- Batting %>% 
+  distinct(playerID) %>% 
+  pull(playerID) %>% 
+  sample(size = 100, replace = FALSE)
+```
+
+```{r}
+#Make a df which keeps only the 100 players selected at random
+Samp_Batting <-  Batting %>% 
+  filter(playerID %in% N_player)
+```
+
+```{r}
+#Fully clean the Batting df to suit our future needs
+Samp_Batting <- Samp_Batting %>% 
+  #This part just re-indexes the parks to fit our subset
+  select(!park_index) %>% 
+  mutate(park = as.character(park)) %>% 
+  mutate(park = as.factor(park)) %>% 
+  mutate(park_index = as.integer(park), .after = park) %>% 
+  #Give the players a unique index
+  mutate(player_index = as.factor(playerID), .after = playerID) %>% 
+  mutate(player_index = as.integer(player_index)) %>% 
+  #Give the players a centered age (centered at 30)
+  mutate(cAge = Age-30, .after = Age)
+```
+
+## Consider Park Factors
+
+In my past explorations, I found that park factors can have huge influences on player's ability to hit HR's. So, the first way to improve this model would be incorporating park effects into this analysis.
+
+```{r}
+data3a <- list(
+  N = nrow(Samp_Batting),
+  n_player = n_distinct(Samp_Batting$player_index),
+  AB = Samp_Batting %>% pull(AB),
+  HR = Samp_Batting %>% pull(HR),
+  Player = Samp_Batting %>% pull(player_index),
+  cAge = Samp_Batting %>% pull(Age) -30,
+  cAgeSq = (Samp_Batting %>% pull(Age) -30)**2,
+  Park = Samp_Batting %>% pull(park_index)
+)
+```
+
+```{r}
+fit3a <- stan(
+  file = "HR3a.stan",
+  data = data3a,
+  iter = 1000
+)
+```
+
+Stan is complaining to me about R-hats and whatnot. I'll go back and iterate over this more on my PC but for the time being this is purely a test of concept, so we'll have to deal with imperfection.
+
+In the meantime we can explore how everything looks in the plots below:
+
+```{r}
+plot(fit3a, pars="beta0")
+plot(fit3a, pars = "beta1")
+plot(fit3a, pars = "beta2")
+plot(fit3a, pars = "beta5")
+```
+
+## Consider Year Factors
+
+As I ponder it, I realize that adding in a year effect at this point may not make much sense. I want the year's index to represent a change of 1 year. However, from my sample, I consider a lot of years and it is more than likely that there are "gaps" in my years considered from the players selected. That is, it is more than likely since I pick players at random that the years considered could follow a time interval such as \[1973-1980\] U \[1982-1990\]. Notice in this interval we are missing the year 1981. However, from the index's point of view, there is no gap. It would give \[8\] to 1980 and \[9\] to 1982. But the jump from index \[8\] to \[9\] would not be missing the jump from 1980 to 1981 and the jump from 1981 to 1982. So, I think I'll leave the year effect out since it wouldn't describe what I want it to, nor would it be easy to interpret.
+
+## Consider Cubic and Quartic Polynomials.
+
+This then leaves us with considering the higher order of the polynomials.
+
+Adding these to the analysis will be really easy. Just continue the format for the previous betas for beta3 and beta4.
+
+```{r}
+data3b <- list(
+  N = nrow(Samp_Batting),
+  n_player = n_distinct(Samp_Batting$player_index),
+  AB = Samp_Batting %>% pull(AB),
+  HR = Samp_Batting %>% pull(HR),
+  Player = Samp_Batting %>% pull(player_index),
+  cAge = Samp_Batting %>% pull(Age) -30,
+  cAgeSq = (Samp_Batting %>% pull(Age) -30)**2,
+  cAgeCb = (Samp_Batting %>% pull(Age) -30)**3,
+  cAgeQa = (Samp_Batting %>% pull(Age) -30)**4,
+  Park = Samp_Batting %>% pull(park_index)
+)
+```
+
+```{r}
+fit3b <- stan(
+  file = "HR3b.stan",
+  data = data3b,
+  iter = 200
+)
+```
+
+I keep getting errors with this. I believe that I've gotten these problems before but I cant remember how we solved them.
