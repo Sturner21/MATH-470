@@ -204,6 +204,37 @@ plot(fit3a, pars = "beta2")
 plot(fit3a, pars = "beta5")
 ```
 
+## Adjust 3a model
+
+In the 11/17 meeting, we changed how parks entered the model.
+
+```{r}
+data3aa <- list(
+  N = nrow(Samp_Batting),
+  n_player = n_distinct(Samp_Batting$player_index),
+  n_park = n_distinct(Samp_Batting$park_index),
+  AB = Samp_Batting %>% pull(AB),
+  HR = Samp_Batting %>% pull(HR),
+  Player = Samp_Batting %>% pull(player_index),
+  cAge = Samp_Batting %>% pull(Age) -30,
+  cAgeSq = (Samp_Batting %>% pull(Age) -30)**2,
+  Park = Samp_Batting %>% pull(park_index)
+)
+```
+
+```{r}
+fit3aa <- stan(
+  file = "HR3aa.stan",
+  data = data3aa,
+  iter = 2000
+)
+```
+
+```{r}
+print(fit3aa, pars = c("mu5", "sigma5"))
+```
+
+
 ## Consider Year Factors
 
 As I ponder it, I realize that adding in a year effect at this point may not make much sense. I want the year's index to represent a change of 1 year. However, from my sample, I consider a lot of years and it is more than likely that there are "gaps" in my years considered from the players selected. That is, it is more than likely since I pick players at random that the years considered could follow a time interval such as \[1973-1980\] U \[1982-1990\]. Notice in this interval we are missing the year 1981. However, from the index's point of view, there is no gap. It would give \[8\] to 1980 and \[9\] to 1982. But the jump from index \[8\] to \[9\] would not be missing the jump from 1980 to 1981 and the jump from 1981 to 1982. So, I think I'll leave the year effect out since it wouldn't describe what I want it to, nor would it be easy to interpret.
@@ -218,6 +249,7 @@ Adding these to the analysis will be really easy. Just continue the format for t
 data3b <- list(
   N = nrow(Samp_Batting),
   n_player = n_distinct(Samp_Batting$player_index),
+  n_park = n_distinct(Samp_Batting$park_index),
   AB = Samp_Batting %>% pull(AB),
   HR = Samp_Batting %>% pull(HR),
   Player = Samp_Batting %>% pull(player_index),
