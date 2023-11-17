@@ -35,15 +35,15 @@ parameters {
   vector[n_player] beta4;
   
   real mu0;
-  real sigma0;
+  real<lower=0> sigma0;
   real mu1;
-  real sigma1;
+  real<lower=0> sigma1;
   real mu2;
-  real sigma2;
+  real<lower=0> sigma2;
   real mu3;
-  real sigma3;
+  real<lower=0> sigma3;
   real mu4;
-  real sigma4;
+  real<lower=0> sigma4;
   
   vector[n_player] beta5;
   real mu5;
@@ -68,6 +68,7 @@ model {
     
     
     // I could be convinced otherwise, but I believe there is sufficient theory to suggest that using a multilevel model for park effects makese sense
+    // Bad idea. Just do a single park effect per park, not per player becuase you didn't implement it correctly.
     beta5[n] ~ normal(mu5, sigma5);
   }
   
