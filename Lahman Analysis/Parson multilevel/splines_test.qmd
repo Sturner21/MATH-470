@@ -72,6 +72,17 @@ players <- Batting %>% group_by(playerID, Age) %>%
 ```
 
 ```{r}
+#| eval: false
+
+# This code leaves exactly with "players" in chunck above but doesn't need the extra group and ungroup
+
+players <- Batting %>% group_by(playerID, Age) %>% 
+  summarize(AB = sum(AB),
+            HR = sum(HR)) %>% 
+  filter(min(AB) >= 50, n() >= 6)
+```
+
+```{r}
 logit <- function(p){
   log(p / (1 - p))
 }

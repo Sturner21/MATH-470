@@ -1,6 +1,17 @@
 ---
-title: "Draft 1"
-format: html
+title: "Bayesian Data Analysis - Rough Draft"
+author: "Sam Turner"
+date: today
+format: 
+  html:
+    toc: true
+    toc-location: left
+    toc-expand: true
+    embed-resources: true
+    
+execute: 
+  echo: false
+  warning: false
 ---
 
 ```{r}
@@ -62,25 +73,114 @@ Batting <- Batting %>%
 Batting <- Batting %>% 
   mutate(park = as.factor(park)) %>% 
   mutate(park_index = as.integer(park), .after = park)
+
+#Find qualified players who have over 50 AB's in each of the minimum 6 seasons played from 1973-2019
+qualified_players <- Batting %>% group_by(playerID, Age) %>% 
+  summarize(AB = sum(AB),
+            HR = sum(HR)) %>% 
+  filter(min(AB) >= 50, n() >= 6)
+
+#Filter Batting DF for qualified players
+Batting <- Batting %>% 
+  filter(playerID %in% qualified_players$playerID)
+
+#Calculated each players HR proportion "p"
+Batting <- Batting %>% 
+  mutate(p = HR / AB, .after=AB)
 ```
 
-# Fellingham & Fisher (2017)
+# Introduction and Motivations
 
-To apply the methods discussed in *Statistical Rethinking* by Richard McElreath, Dr. Parson and I decided to replicate *Predicting Home Run Production in Major League Baseball Using a Bayesian Semiparametric Model* by Gilbert Fellingham and Jared Fisher. This article in particular has drawn our attention because of some unique and interesting modeling choices made by the authors. Indeed, both Dr. Parson and I believe that while the initial investigation by Fellingham and Fisher (2017) is interesting, there are some questionable choices made by the authors throughout the paper. For example, there are few independent variables and their associated priors are very weak. The paper does a good job with displaying plenty of visualizations for the reader, yet, under careful examination one is left with the impression that the authors have cherry-picked certain players to focus on rather than examining players at random to examine the validity of their model. These reasons in tandem bring their findings into question. Thus, Dr. Parson and I have embarked to investigate the same research question, can we forecast home run potential using a Bayesian model which accounts for age, home ballpark, and other factors.
+To apply the methods discussed in *Statistical Rethinking* by Richard McElreath, Dr. Parson and I decided to replicate *Predicting Home Run Production in Major League Baseball Using a Bayesian Semiparametric Model* by Gilbert Fellingham and Jared Fisher. This article in particular has drawn our attention because of some unique and interesting modeling choices made by the authors. Both Dr. Parson and I believe that the initial investigation by Fellingham and Fisher (2017) is interesting, but there are some questionable modeling choices made by the authors throughout the paper. For example, there are few predictor variables and their associated priors are very weak. The paper does a good job with displaying plenty of visualizations for the reader, yet, under careful examination one is left with the impression that the authors have chosen to display a non-random assortment of players. This leaves careful readers wondering if the validity of their model is constant across all players, or if they have chosen a certain subset because these special players justify the use of their model. These reasons in tandem bring Fellingham and Fisher's (2017) findings into question. Thus, Dr. Parson and I have embarked to investigate the same research question as them: can we use a multilevel Bayesian model to predict a player's home run performance?
 
-## Background
+## Baseball Background
 
-In Major League Baseball (MLB) the team on offense is allowed to send one player, at a time, up to home plate to "bat." Any time a player is sent up to bat this counts as a plate appearance (PA) for said player. Depending on its outcome the PA may or may not be considered an at-bat (AB). If the PA ends in the player being walked (BB \[base on balls\]) then it is not recorded as an AB because it is thought the player did not receive a fair chance at hitting the baseball. On the other hand, if the PA ends in the player getting a hit or getting out, then it is assumed that he had a fair chance at hitting the ball and the PA is recorded as an AB.
+In Major League Baseball (MLB) the team on offense is allowed to send one player, at a time, up to home plate to "bat." Any time a player is sent up to bat this constitutes a plate appearance (PA). Depending on the outcome of the PA it may or may not be considered an at-bat (AB). If the PA ends in the player being walked (BB \[Base on Balls\]) then it is not recorded as an AB because it is thought the player did not receive a fair chance at hitting the baseball. On the other hand, if the PA ends in the player getting a hit or getting out, then it is assumed that he had a fair chance at hitting the ball and the PA is recorded as an AB. This distinction to the average fan is mostly arbitrary. However, in a modeling context it is very important. When modeling a player's ability to hit home runs (HR), as this paper is concerned with, the distinction is important because it is unfair to consider all the PA's of a player because this set of outcomes includes outcomes where it is assumed that the player has not been given a fair chance to hit the ball. For similar reasons, considering the subset of outcomes where it is assumed that they player has been given a fair chance to hit the ball seems more appropriate, this subset is AB's. Thus, this paper uses AB's as the main predictor for home runs hit by a certain player. Fellingham and Fisher (2017) also agree with this reasoning and use AB's, rather than PA's, in their research.
 
-The principle concern of this paper is how to model the amount of home runs (HR) a player will hit in a given season. Home runs are an outcome which is recorded as an AB where the player is able to touch all four bases before being "tagged out," where the defense is able to touch the player with the baseball. The primary way this occurs, and is the one that most readers will be familiar with, is by hitting the ball over the fence in the outfield. However, it is just as correct for the ball to remain in the boundaries of the field and for the player to reach all bases without being tagged out. Due to HR's being recorded as AB's both ourselves and Fellingham and Fisher (2017) incorporate AB's in our models rather than PA's.
+Furthermore, it is logical to ask: why not consider both? Incorporating more predictors can make a model more accurate at prediction, which both Fellingham and Fisher (2017) and this paper are concerned with. The reasons this paper does not consider both is because, especially in a Bayesian context, researchers must be concerned with multicollinearity. Without a doubt there is a strong correlation between the two because one is a subset of the other. In fact, we can see that the correlation between the two is quite strong in (REFERENCE TO CORRELATION BETWEEN AB'S AND PA'S). When multicollinearity is introduced into a model, it can be difficult for the Markov Chain Monte Carlo (MCMC) algorithm to parse out which of the two variables is responsible for the changes in the dependent variable. Thus, we neglect PA's from our model both because theory stipulates it is an inferior predictor and used in tandem with our current predictor it would cause problems for the modeling software.
 
-Another interesting quirk of baseball is that, like soccer, stadiums differ in dimensions. This is not universal; baseball fields and stadiums must have the same measurements for their infields. Yet, for the most part baseball stadiums are allowed to configure their outfields as they please. This gives baseball stadiums a variety of unique shapes ranging in outfield sizes. For example, Fenway Park (1923-) is known to have the closest outfield wall with their "Green Monster" in left field being only 305 ft. from home plate. While the Polo Grounds (1891-1963) boasted one of the furthest walls from home play at 483 ft. in center field. Stadiums also differ in location. Marlins Park (2012-2020) sits at 15 ft. above sea level while Coors Field (1995-) sits at 5183 ft. above sea level. As illustrated there is not only vastly different dimensions that baseball fields can take on but also different environments which affect a player's ability to hit home runs. Thus, any model which attempts to model players' ability to hit HR's needs to consider ballpark factors.
+An interesting quirk of baseball is that, like soccer, stadiums differ in dimensions. This is not universal; baseball fields and stadiums must have the same measurements for their infields. Yet, for the most part baseball stadiums are allowed to configure their outfields as they please. This becomes important because most HR's are achieved by hitting the baseball over the outfield fence. Thus, fences closer to home plate lead to more HR's from all hitters, ceteris paribus. The non-standardized nature of stadiums' fences gives them a variety of unique shapes and ranging outfield sizes. For example, Fenway Park (1923-) is known to have the closest outfield wall with their "Green Monster" in left field being only 305 ft. from home plate. While the Polo Grounds (1891-1963) boasted one of the furthest walls from home plate at 483 ft. in center field. Stadiums also differ in location. Marlins Park (2012-2020) sits at 15 ft. above sea level while Coors Field (1995-) sits at 5183 ft. above sea level. As illustrated there are not only vastly different dimensions that baseball fields can take on but also different environments which affect a player's ability to hit home runs. Thus, any model which attempts to model players' ability to hit HR's needs to consider ballpark factors.
 
-It is obvious from examining the years that stadiums were used to infer that baseball has been played for a long time. Indeed, MLB as we know it has been played since about 1871 and the origins of the game go back even father than that. Over this time the some rules of the game have undergone incredible transformations which vastly change the nature of the game. For example, from 1900-1920 baseball was in the "deadball era." During this period the materials used to create baseballs made it so that the ball absorbed much more force than it does today. This had a plethora of implications for the game and how it was played; HR's were much less common and since they were harder to hit. In contrast, the period from 1994-2004 is known as the "steroid era" because of the rampant use of performance enhancing drugs (PED) used by players. This, in combination with other factors, led to players obliterating previous records, such as the career and season home runs records. It is obvious from these facts that decade played for player's had a drastic impact on their ability to produce outcomes. In fact, this can be visualized by considering all the runs scored during a given season from 1871-2019 displayed in @fig-RunsByYear.
+MLB, as we know it, has been played since about 1871 and the origins of the game go back even father than that. Over this time the some rules of the game have undergone incredible transformations which vastly change the nature of the game. For example, from 1900-1920 baseball was in the "deadball era." During this period the materials used to create baseballs made it so that the ball absorbed much more force than it does today. This had a plethora of implications for the game and how it was played; HR's were much less common because they were harder to hit. In contrast, the period from 1994-2004 is known informally as the "steroid era" because of the rampant use of performance enhancing drugs (PED) used by players. This, in combination with other factors such as harder materials used to make baseballs, led to players obliterating a variety of previous hitting records, such as the career and season home runs records. It is obvious from these facts that decade played for player's had a drastic impact on their ability to produce outcomes. In fact, this can be visualized by considering all the runs scored during a given season from 1871-2019 displayed in @fig-RunsByYear.
 
-Finally, it does not take an advanced degree to understand that age is an important factor in athletic ability. To an extent in MLB, seniority can act both as a blessing and a curse. On the one hand, older players are less able to hit home runs because their body is starting to lose its peak athletic performance it had when it was, say, 30. On the other hand, these older players also have more experience than younger players and thus may be better able to hit home runs from strategies they have found during their time playing. Further we can visualize this by looking at the median home runs hit by each player from 1871-2022, which is displayed in @fig-HR.By.Age.All. However, this graph does not depict some of the nuances of the data well. For example, we have almost no data on how often 18 -year-olds hit HR's because they play in MLB infrequently. As can be seen with the standard error bars on the ages above 40, older players suffer a similar problem of small sample size. Instead, consider @fig-HR.By.Age.20to40 which shows only considers players who are 20-40 years old during the season. This graph clearly shows the complex non-linear relationship between player performance and age. It shows that players are generally improving in their ability to hit HR's from 20-30 years old. Then, however, we see a slight downwards trend followed by an upward trend with increasing error bars. This shows that as players age past 30 their abilities start to decline. However, the jump afterwards can probably be attributed to players who are very good, continuing their careers. If a player is very good then they are going to be able to perform at above average when they are, say, 35. However, if the player is not generally considered good, then a team will likely opt to try out a new young rookie who may not be as good in the moment but is more projectable. Thus, we see less players playing past 35 which explains the higher standard errors, but they are of a higher caliber than any other age group which is why they are still playing, thus we see their proportion as higher.
+Finally, age is an important factor in athletic ability. To an extent in MLB, seniority can act both as a blessing and a curse. On the one hand, older players are less able to hit home runs because their body is starting to lose its peak athletic performance it had when it was, say, 30. On the other hand, these older players also have more experience than younger players and thus may be better able to hit home runs from strategies they have found during their time playing. Further we can visualize this by looking at the median home runs hit by each player from 1871-2022, which is displayed in @fig-HR.By.Age.All. However, this graph does not depict some of the nuances of the data well. For example, we have almost no data on how often 18 -year-olds hit HR's because they play in MLB infrequently. As can be seen with the standard error bars on the ages above 40, older players suffer a similar problem of small sample size. Instead, consider @fig-HR.By.Age.20to40 which shows only considers players who are 20-40 years old during the season. This graph clearly shows the complex non-linear relationship between player performance and age. It shows that players are generally improving in their ability to hit HR's from 20-30 years old. Then, however, we see a slight downwards trend followed by an upward trend with increasing error bars. This shows that as players age past 30 their abilities start to decline. However, the jump afterwards can probably be attributed to players who are very good, continuing their careers. If a player is very good then they are going to be able to perform at above average when they are, say, 35. However, if the player is not generally considered good, then a team will likely opt to try out a new young rookie who may not be as good in the moment but is more projectable. Thus, we see less players playing past 35 which explains the higher standard errors, but they are of a higher caliber than any other age group which is why they are still playing, thus we see their proportion as higher.
+
+## Literature Review
+
+As mentioned, Fellingham and Fisher (2017) have both considered and published their thoughts on this research question. This research question concerns predicting player home run performance using Bayesian multilevel modeling. To do this, Fellingham and Fisher (2017) used data from the Lahman data set spanning 1871 to 2008 to estimate the parametric weights for their model. Over this time frame they only considered players who had played for at least 6 seasons and who, in each of those seasons, had at least 50 AB's. They only considered seasons where the players were 18-years-old to 45-years-old.
+
+To predict a player's HR's they used a binomial logistic model. This model predicts HR's using the AB's of a player for the $n$ trials and the underlying ability of a player to hit a HR, $\pi$ as their probability of success. Fellingham and Fisher (2017) estimate a player's ability to hit home runs from his age in a season, decade born, season played, and home ball park. This leaves Fellingham and Fisher with the following model:
+
+$$
+\begin{align}
+h_{ij}|\pi_{ij}&\sim Binomial(ab_{ij},\pi_{ij})\\
+\\
+logit(\frac{\pi_{ij}}{1-\pi_{ij}})&=x_{ij}\beta_{i}+\theta_i+\delta_j
++\xi_p
+\end{align}
+$$
+
+Where $h_{ij}$ is the HR by a player $i$ in year $j$, $\pi_{ij}$ is the probability of a HR for player $i$ in year $j$, $ab$ is the number of AB's for player $i$ in year $j$, $x_{ij}$ and $\beta_i$ are vectors of the associated weights of the orthogonal quartic polynomial for a player's age on HR probabilities, $\theta_i$ is the effect of decade of birth, $\delta_j$ is the effect of season of play, and $\xi_p$ is the effect of the home ballpark.
+
+What makes this model so strange are the priors that Fellingham and Fisher (2017) chose. Disregarding that there is no justification for these priors, Fellingham and Fisher (2017) set the following priors for these parameters:
+
+$$
+\begin{align}
+\theta_i&\sim Normal(\mu_d,\sigma^2_{d_i}), d\in \{1...14\}, i\in\{1,...,3735\}\\
+\\
+\mu_d&\sim Normal(-2.5,var=1), d_i\in\{1,...,14\}\\
+\\
+\sigma^2_{d_i}&\sim Gamma(3,3), d_i\in\{1,...14\} \\
+\\
+\delta_j&\sim Normal(-2.5, var=4),j\in \{1,...,138\}\\
+\\
+\xi_p&\sim Normal(-2.5, var=4), p\in \{1,...,222\}\\
+\end{align}
+$$
+
+These priors are quite strange because they are so broad. For example, consider the priors on either $\delta_j$ or $\xi_p$. The priors state that on a logistic scale, it is normal for the decade of birth and season of play parameters to vary along the interval \[-6.5, 1.5\]. On the normal probability scale, this corresponds to probability fluctuations of about (0.0015, 0.81). Surely there must be better priors than this which Fellingham and Fisher (2017) could have used. Coincidentally, this is probably why in using MCMC to estimate their parameters they needed to use 200,000 iterations. Likely, their model could have estimated their parameters much more easily had they given stronger priors. This is one of the areas this paper seeks to improve Fellingham and Fisher's (2017) methods.
+
+Another questionable choice that Fellingham and Fisher (2017) make is that they estimated their model parameters using FORTRAN. Given the antiquity of FORTRAN, replication of Fellingham and Fisher (2017) is quite difficult. Not to mention that the 200,000 iterations makes the research so computationally expensive that it makes it nearly impossible for any other research team to replicate. This is disappointing because the scientific method relies on replication for the advancement of knowledge. Thus, our research seeks to make the algorithms used in this research more accessible because we chose to use R to interface with the modeling software Stan, which is written in the (more contemporary) C++ programming language.
+
+Finally, we see that Fellingham and Fisher (2017) project the performance of a number of players from their considered 3,735. However, upon closer inspection these players do not seem to be randomly selected because the selected players were pretty renown during their prime. Nor, does Fellingham and Fisher (2017) make the assurance that these players are randomly selected. This should leave readers with unease because it is unclear how well their model fits most players, which seemed to be what the paper was trying to investigate. Although unlikely, it is conceivable that they only selected players which make their model appear the most reliable. Instead, our paper seeks to remedy this by considering a random assortment of players to examine the fit of our model.
+
+DISCUSS THE OTHER ARTICLE THAT DR. PARSON SHARED WITH YOU ON SIMILAR/SAME RESEARCH
 
 ## Model
+
+Given all the previous problems with Fellingham and Fisher (2017) mentioned above, there is an argument to be made that a simple generalized linear model (GLM) could be used instead of their complicated Bayesian semiparametric model. While it is true that a GLM could be used to predict HR's of a player it would not nearly be as accurate as a Bayesian model. Nor would it be able to as accurately capture the non-linearities present in the data. This is because the greatest strength of using the Bayesian technique is that it allows for multilevel models to be created. That is, Bayesian models allow for models to "learn" from other players and group certain players when there is not as much data available for them. In turn, this leads to better predictions about players where data is lacking. This "learning" is known as partial pooling, where the model identifies that parameters for each player (or year etc.) probably come from the same distribution but may not share the exact same estimates.
+
+Exploring concretely how our model works will make it clearer than discussing it in the abstract. The current model that we have is the following:
+
+$$
+\begin{align}
+HR_n &\sim Binomial(AB_n,p)\\
+logit(p) &= \beta_{0}Player_n+\beta_1cAge_n+\beta_2cAge^2_n+\beta_3cAge^3_n+\beta_4cAge^4_n+\beta_5Park
+\end{align}
+$$
+
+$$
+\begin{align}
+\beta_0&\sim Normal(\mu_0, \sigma_0)\\
+\beta_1&\sim Normal(\mu_1, \sigma_1)\\
+\beta_2&\sim Normal(\mu_2, \sigma_2)\\
+\beta_3&\sim Normal(\mu_3, \sigma_3)\\
+\beta_4&\sim Normal(\mu_4, \sigma_4)\\
+\end{align}
+$$
+
+$$
+\begin{align}
+\mu_0 &\sim Normal(-3.5, 0.1)\\
+\sigma_0&\sim Exponential(1)
+\end{align}
+$$
+
+In this model, we say that the $HR$'s of player $n$ are binomialy distriubted with number of trials for player $n$ are $AB$. The probability of success (hitting a HR) denoted as $p$. Furthermore, we measure $p$ on the logistic scale. We note here that $p$ changes due to a variety of factors. First, we noticed in the data that most hitters hit a HR in about 3 out of every 100 AB's (REFERENCE TO FIGURE WHICH SHOWS AVERAGE HR PER AB IN MLB). Thus, we assume that the underlying probabilty of any player in the MLB for hitting a HR is about -3.5 on the logit scale, or 0.03 on the standard probability scale.
+
+We recognize that this depends on the hitter which is where the use of a multilevel model becomes useful. Instead of simply using the average probability as our intercept, which is what a dummy variable would do in a GLM, we are able to allow our model choose an intercept which agrees with the data but can adapt depending on the player. Thus, we let $\beta_0$ be normally distributed with mean $\mu_0$ (where $\mu_0$ is normally distributed with mean -3.5 and standard deviation 0.1) and standard deviation $\sigma_0$ (where the parameter $\sigma_0$ itself is exponentially distributed).
+
+EXPLORE THE DATA HERE AND WHY A MULTILEVEL MODEL WORKS BEST
 
 # Figures
 
@@ -134,4 +234,28 @@ ggplot(data = HR.Prop.Age %>% filter(Age >=20 & Age <= 40))+
   labs(title = "Proportion of Home Runs per At-Bat by Age",
        x = "Age",
        y = "Proportion of HR per AB")
+```
+
+```{r}
+ggplot(data = Batting)+
+  aes(x = p)+
+  geom_histogram(bins = 75)+
+  geom_vline(xintercept=median(Batting$p, na.rm = TRUE) , color="red")+
+  labs(title = "Distribution of Players' HR Proportions",
+       subtitle = "Seasons Considered: 1973-2019",
+       x = "Proportions (p)",
+       y = "Observations")
+```
+
+```{r}
+#I want this to have a little more breaks in the x-axis to highlight where the median is
+ggplot(data = Batting)+
+  aes(x = p)+
+  geom_histogram(bins = 75)+
+  geom_vline(xintercept=median(Batting$p, na.rm = TRUE) , color="red")+
+  xlim(x=c(0,0.15))+
+  labs(title = "Constricted View of Distribution of Players' HR Proportions",
+       subtitle = "Seasons Considered: 1973-2019",
+       x = "Proportions (p)",
+       y = "Observations")
 ```
