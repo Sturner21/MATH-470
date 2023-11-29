@@ -87,6 +87,28 @@ Batting <- Batting %>%
 #Calculated each players HR proportion "p"
 Batting <- Batting %>% 
   mutate(p = HR / AB, .after=AB)
+#You can see this for yourself too, but there are 657 players in this dataframe now
+```
+
+```{r}
+#Choose 500 players at random to consider
+#If this doesn't take too long, then we can come back later and change this to possibly consider all players. Or just widen the initial time-frame considered and do 1000 players
+
+set.seed(500)
+
+N_player <- Batting %>% 
+  distinct(playerID) %>% 
+  pull(playerID) %>% 
+  sample(size=500, replace=FALSE)
+```
+
+```{r}
+#Make a dataframe that only keeps the 500 players
+Samp_Batting <- Batting %>% 
+  filter(playerID %in% N_player)
+
+head(Samp_Batting)
+#If curious, this seed and selection covers all years. So, it should be able to handle the year-to-year effects
 ```
 
 # Introduction and Motivations
@@ -176,7 +198,7 @@ $$
 \end{align}
 $$
 
-In this model, we say that the $HR$'s of player $n$ are binomialy distriubted with number of trials for player $n$ are $AB$. The probability of success (hitting a HR) denoted as $p$. Furthermore, we measure $p$ on the logistic scale. We note here that $p$ changes due to a variety of factors. First, we noticed in the data that most hitters hit a HR in about 3 out of every 100 AB's (REFERENCE TO FIGURE WHICH SHOWS AVERAGE HR PER AB IN MLB). Thus, we assume that the underlying probabilty of any player in the MLB for hitting a HR is about -3.5 on the logit scale, or 0.03 on the standard probability scale.
+In this model, we say that the $HR$'s of player $n$ are binomialy distributed with number of trials for player $n$ are $AB$. The probability of success (hitting a HR) denoted as $p$. Furthermore, we measure $p$ on the logistic scale. We note here that $p$ changes due to a variety of factors. First, we noticed in the data that most hitters hit a HR in about 3 out of every 100 AB's (REFERENCE TO FIGURE WHICH SHOWS AVERAGE HR PER AB IN MLB). Thus, we assume that the underlying probability of any player in the MLB for hitting a HR is about -3.5 on the logit scale, or 0.03 on the standard probability scale.
 
 We recognize that this depends on the hitter which is where the use of a multilevel model becomes useful. Instead of simply using the average probability as our intercept, which is what a dummy variable would do in a GLM, we are able to allow our model choose an intercept which agrees with the data but can adapt depending on the player. Thus, we let $\beta_0$ be normally distributed with mean $\mu_0$ (where $\mu_0$ is normally distributed with mean -3.5 and standard deviation 0.1) and standard deviation $\sigma_0$ (where the parameter $\sigma_0$ itself is exponentially distributed).
 
@@ -193,6 +215,7 @@ Runs.By.Year <- Lahman::Teams %>%
 
 ```{r}
 #| label: fig-RunsByYear
+#| fig-cap: "Cumulative Runs Scored in MLB by Year"
 
 ggplot(data = Runs.By.Year)+
   aes(x=yearID, y=R)+
@@ -216,6 +239,7 @@ HR.Prop.Age <- Batting %>%
 
 ```{r}
 #| label: fig-HR.By.Age.All
+#| fig-cap: "Proportion of Home Runs per At-Bat by Age"
 
 ggplot(data = HR.Prop.Age)+
   geom_pointrange(mapping = aes(x = Age, y = prop, ymin = prop - prop.se,
@@ -227,6 +251,7 @@ ggplot(data = HR.Prop.Age)+
 
 ```{r}
 #| label: fig-HR.By.Age.20to40
+#| fig-cap: "Proportion of Home Runs per At-Bat by Age"
 
 ggplot(data = HR.Prop.Age %>% filter(Age >=20 & Age <= 40))+
   geom_pointrange(mapping = aes(x = Age, y = prop, ymin = prop - prop.se,
