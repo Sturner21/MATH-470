@@ -22,6 +22,7 @@ library(tidyverse)
 library(rstan)
 library(Lahman)
 library(bayesplot)
+library(tidybayes)
 library(corrplot)
 ```
 
@@ -95,10 +96,16 @@ Batting <- Batting %>%
   mutate(player_index = as.factor(playerID), .after = playerID) %>% 
   mutate(player_index = as.integer(player_index))
 
-#Create a centered age variable by subtracting 30 from everyone's age
+#Create a centered age variable by subtracting 30 from everyone's age and square it for non-liner effect
 
 Batting <- Batting %>% 
-  mutate(cAge = Age -30, .after = Age)
+  mutate(cAge = Age -30, .after = Age) %>% 
+  mutate(cAgeSq = cAge**2, .after = cAge)
+
+#Make a year index because it's easier than having to create one everytime
+
+Batting <- Batting %>% 
+  mutate(year_index = yearID -1972, .after = yearID)
 ```
 
 ```{r}
@@ -380,4 +387,91 @@ ggplot(data = Batting)+
        subtitle = "Seasons Considered: 1973-2019",
        x = "Proportions (p)",
        y = "Observations")
+```
+
+```{r}
+#The selected player (id=651) is Robin Yount
+
+set.seed(1)
+
+select_player <- Batting %>% 
+  distinct(playerID) %>% 
+  pull(playerID) %>% 
+  sample(size=1, replace=FALSE)
+
+select_player
+```
+
+```{r}
+select_player_Batting <- Batting %>% 
+  filter(playerID %in% select_player) %>% 
+  select(playerID, player_index, yearID, year_index, Age, cAge, cAgeSq, AB, HR, p, park_index)
+
+select_player_Batting
+```
+
+```{r}
+#These first three effects (alpha, beta, and eta) are all corresponding to the 651st player (Robin Yount)
+alpha_i651 <- fit.poly %>% 
+  spread_draws(alpha[group]) %>% 
+  summarise_draws() %>% 
+  filter(group==651)
+
+beta_i651 <- fit.poly %>% 
+  spread_draws(beta[group]) %>% 
+  summarise_draws() %>% 
+  filter(group==651)
+
+eta_i651 <- fit.poly %>% 
+  spread_draws(eta[group]) %>% 
+  summarise_draws() %>% 
+  filter(group==651)
+
+#Meanwhile, this value corresponds to the park
+delta_i651 <- fit.poly %>% 
+  spread_draws(delta[group]) %>% 
+  summarise_draws() %>% 
+  filter(group==24)
+
+#And this value corresponds to the years that he played
+xi_i651 <- fit.poly %>% 
+  spread_draws(xi[group]) %>% 
+  summarise_draws() %>% 
+  filter(group >= 2 & group <= 21)
+```
+
+```{r}
+#This outputs the associated means for each index for player 651
+alpha_i651 %>% pull(mean)
+beta_i651 %>% pull(mean)
+eta_i651 %>% pull(mean)
+delta_i651 %>% pull(mean)
+xi_i651 %>% pull(mean)
+```
+
+```{r}
+select_player_Batting <- select_player_Batting %>% 
+  mutate(alpha = alpha_i651 %>% pull(mean), .after = player_index) %>%
+  mutate(beta = beta_i651 %>% pull(mean), .after = cAge) %>% 
+  mutate(eta = eta_i651 %>% pull(mean), .after = cAgeSq) %>% 
+  mutate(delta = delta_i651 %>% pull(mean), .after = park_index) %>% 
+  mutate(xi = xi_i651 %>% pull(mean), .after = year_index) %>% 
+  mutate(pred = alpha + (beta*cAge) + (eta*cAgeSq) + (delta) + (xi) , .after = p) %>% 
+  mutate(inv_logit_pred = inv.logit(pred), .after=pred)
+```
+
+```{r}
+ggplot(data = select_player_Batting)+
+  aes(x = cAge, y = p)+
+  geom_point()+
+  geom_smooth()+
+  labs(title = "Actual Trajectory for player #651")
+```
+
+```{r}
+ggplot(data = select_player_Batting)+
+  aes(x = cAge, y=inv_logit_pred)+
+  geom_point()+
+  geom_smooth()+
+  labs(title = "Predicted Career Trajectory for #651")
 ```
