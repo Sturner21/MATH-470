@@ -88,9 +88,20 @@ Batting <- Batting %>%
 Batting <- Batting %>% 
   mutate(p = HR / AB, .after=AB)
 #You can see this for yourself too, but there are 657 players in this dataframe now
+
+#Create an index for each player
+Batting <- Batting %>% 
+  mutate(player_index = as.factor(playerID), .after = playerID) %>% 
+  mutate(player_index = as.integer(player_index))
+
+#Create a centered age variable by subtracting 30 from everyone's age
+
+Batting <- Batting %>% 
+  mutate(cAge = Age -30, .after = Age)
 ```
 
 ```{r}
+#| eval: false
 #Choose 500 players at random to consider
 #If this doesn't take too long, then we can come back later and change this to possibly consider all players. Or just widen the initial time-frame considered and do 1000 players
 
@@ -103,6 +114,7 @@ N_player <- Batting %>%
 ```
 
 ```{r}
+#| eval: false
 #Make a dataframe that only keeps the 500 players
 Samp_Batting <- Batting %>% 
   filter(playerID %in% N_player)
@@ -166,43 +178,111 @@ Another questionable choice that Fellingham and Fisher (2017) make is that they 
 
 Finally, we see that Fellingham and Fisher (2017) project the performance of a number of players from their considered 3,735. However, upon closer inspection these players do not seem to be randomly selected because the selected players were pretty renown during their prime. Nor, does Fellingham and Fisher (2017) make the assurance that these players are randomly selected. This should leave readers with unease because it is unclear how well their model fits most players, which seemed to be what the paper was trying to investigate. Although unlikely, it is conceivable that they only selected players which make their model appear the most reliable. Instead, our paper seeks to remedy this by considering a random assortment of players to examine the fit of our model.
 
-DISCUSS THE OTHER ARTICLE THAT DR. PARSON SHARED WITH YOU ON SIMILAR/SAME RESEARCH
-
-## Model
+# Model
 
 Given all the previous problems with Fellingham and Fisher (2017) mentioned above, there is an argument to be made that a simple generalized linear model (GLM) could be used instead of their complicated Bayesian semiparametric model. While it is true that a GLM could be used to predict HR's of a player it would not nearly be as accurate as a Bayesian model. Nor would it be able to as accurately capture the non-linearities present in the data. This is because the greatest strength of using the Bayesian technique is that it allows for multilevel models to be created. That is, Bayesian models allow for models to "learn" from other players and group certain players when there is not as much data available for them. In turn, this leads to better predictions about players where data is lacking. This "learning" is known as partial pooling, where the model identifies that parameters for each player (or year etc.) probably come from the same distribution but may not share the exact same estimates.
+
+```{r}
+#Code to see if HRPolyFit still runs
+stan(
+  file = "HRPolyFit.stan",
+  data = data.poly.fit,
+  iter = 100
+)
+```
 
 Exploring concretely how our model works will make it clearer than discussing it in the abstract. The current model that we have is the following:
 
 $$
 \begin{align}
-HR_n &\sim Binomial(AB_n,p)\\
-logit(p) &= \beta_{0}Player_n+\beta_1cAge_n+\beta_2cAge^2_n+\beta_3cAge^3_n+\beta_4cAge^4_n+\beta_5Park
+HR_{ni} &\sim Binomial(AB_{ni},p_{ni})\\
+logit(\frac{p_{ni}}{1-p_{ni}}) &= \alpha_{n}+\beta_h+\eta_h+\delta_p+\xi_i
 \end{align}
 $$
 
 $$
 \begin{align}
-\beta_0&\sim Normal(\mu_0, \sigma_0)\\
-\beta_1&\sim Normal(\mu_1, \sigma_1)\\
-\beta_2&\sim Normal(\mu_2, \sigma_2)\\
-\beta_3&\sim Normal(\mu_3, \sigma_3)\\
-\beta_4&\sim Normal(\mu_4, \sigma_4)\\
+\alpha_n&\sim Normal(\mu_0, \sigma_0)\\
+\beta_h&\sim Normal(\mu_1, \sigma_1)\\
+\eta_h&\sim Normal(\mu_2, \sigma_2)\\
+\delta_p&\sim Normal(\mu_5, \sigma_5)\\
+\xi_i&\sim Normal(\mu_6, \sigma_6)\\
 \end{align}
 $$
 
 $$
 \begin{align}
 \mu_0 &\sim Normal(-3.5, 0.1)\\
-\sigma_0&\sim Exponential(1)
+\sigma_0&\sim Exponential(1)\\
+\\
+\mu_1&\sim Normal(0,0.01)\\
+\sigma_1&\sim Exponential(10)\\
+\\
+\mu_2&\sim Normal(0,0.01)\\
+\sigma_2&\sim Exponential(100)\\
+\\
+\mu_5&\sim Normal(0,0.01)\\
+\sigma_5&\sim Exponential(10)\\
+\\
+\mu_6&\sim Normal(0,0.25)\\
+\sigma_6&\sim Exponential(10)
 \end{align}
 $$
 
 In this model, we say that the $HR$'s of player $n$ are binomialy distributed with number of trials for player $n$ are $AB$. The probability of success (hitting a HR) denoted as $p$. Furthermore, we measure $p$ on the logistic scale. We note here that $p$ changes due to a variety of factors. First, we noticed in the data that most hitters hit a HR in about 3 out of every 100 AB's (REFERENCE TO FIGURE WHICH SHOWS AVERAGE HR PER AB IN MLB). Thus, we assume that the underlying probability of any player in the MLB for hitting a HR is about -3.5 on the logit scale, or 0.03 on the standard probability scale.
 
-We recognize that this depends on the hitter which is where the use of a multilevel model becomes useful. Instead of simply using the average probability as our intercept, which is what a dummy variable would do in a GLM, we are able to allow our model choose an intercept which agrees with the data but can adapt depending on the player. Thus, we let $\beta_0$ be normally distributed with mean $\mu_0$ (where $\mu_0$ is normally distributed with mean -3.5 and standard deviation 0.1) and standard deviation $\sigma_0$ (where the parameter $\sigma_0$ itself is exponentially distributed).
+We recognize that this depends on the hitter which is where the use of a multilevel model becomes useful. Instead of simply using the average probability as our intercept, which is what a dummy variable would do in a GLM, we are able to allow our model choose an intercept which agrees with the data but can adapt depending on the player. Thus, we let $\alpha$ be normally distributed with mean $\mu_0$ (where $\mu_0$ is normally distributed with mean -3.5 and standard deviation 0.1) and standard deviation $\sigma_0$ (where the parameter $\sigma_0$ itself is exponentially distributed).
+
+$\beta_h$ the effect that a player being age $h$ has on HR probability. Similarly $\eta_h$ is the effect that a player's age squared has on the probability of a HR in an AB. This squared term captures the non-linearity of HR as player's age.
+
+$\delta_p$ is the effect that a player's home ballpark $p$ has on his underlying probability of hitting a home run.
+
+$\xi_i$ represents the change in the underlying probability of player hitting a HR in the year $i$
 
 EXPLORE THE DATA HERE AND WHY A MULTILEVEL MODEL WORKS BEST
+
+# Results
+
+```{r}
+#| eval: false
+
+#Since we aren't fitting anything when we render, we don't need this chunk to take up any extra time calculating usless vectors
+data.poly.fit <- list(
+  N = nrow(Batting),
+  n_player = n_distinct(Batting$player_index),
+  n_park = n_distinct(Batting$park_index),
+  n_year = n_distinct(Batting$yearID),
+  AB = Batting %>% pull(AB),
+  HR = Batting %>% pull(HR),
+  Player = Batting %>% pull(player_index),
+  cAge = Batting %>% pull(cAge),
+  cAgeSq = (Batting %>% pull(cAge))**2,
+  Park = Batting %>% pull(park_index),
+  Year = Batting %>% pull(yearID) -1972
+)
+```
+
+```{r}
+#| eval: false
+
+#We don't want the program, which takes my desktop 30-45 minutes to render, to run every time I need to render the docuement
+fit.poly <- stan(
+  file = "HRPolyFit.stan",
+  data = data.poly.fit,
+  iter = 1e4
+)
+```
+
+```{r}
+#| eval: false
+
+#This saves the fit as and RDS so that I can reference it later when rendering
+saveRDS(fit.poly, "PolyFit.rds")
+```
+
+```{r}
+plot(fit.poly, pars="xi")
+```
 
 # Figures
 
