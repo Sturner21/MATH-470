@@ -22,6 +22,7 @@ library(tidyverse)
 library(rstan)
 library(Lahman)
 library(bayesplot)
+library(corrplot)
 ```
 
 ```{r}
@@ -101,6 +102,14 @@ Batting <- Batting %>%
 ```
 
 ```{r}
+#Make the data needed for the correlation plot
+Batting_cor <- Batting %>%
+  mutate(PA = AB + BB + IBB + HBP + SH + SF) %>% 
+  select(AB, HR, PA, p, park_index, yearID, cAge) %>%
+  filter(!is.na(p))
+```
+
+```{r}
 #| eval: false
 #Choose 500 players at random to consider
 #If this doesn't take too long, then we can come back later and change this to possibly consider all players. Or just widen the initial time-frame considered and do 1000 players
@@ -131,9 +140,9 @@ To apply the methods discussed in *Statistical Rethinking* by Richard McElreath,
 
 In Major League Baseball (MLB) the team on offense is allowed to send one player, at a time, up to home plate to "bat." Any time a player is sent up to bat this constitutes a plate appearance (PA). Depending on the outcome of the PA it may or may not be considered an at-bat (AB). If the PA ends in the player being walked (BB \[Base on Balls\]) then it is not recorded as an AB because it is thought the player did not receive a fair chance at hitting the baseball. On the other hand, if the PA ends in the player getting a hit or getting out, then it is assumed that he had a fair chance at hitting the ball and the PA is recorded as an AB. This distinction to the average fan is mostly arbitrary. However, in a modeling context it is very important. When modeling a player's ability to hit home runs (HR), as this paper is concerned with, the distinction is important because it is unfair to consider all the PA's of a player because this set of outcomes includes outcomes where it is assumed that the player has not been given a fair chance to hit the ball. For similar reasons, considering the subset of outcomes where it is assumed that they player has been given a fair chance to hit the ball seems more appropriate, this subset is AB's. Thus, this paper uses AB's as the main predictor for home runs hit by a certain player. Fellingham and Fisher (2017) also agree with this reasoning and use AB's, rather than PA's, in their research.
 
-Furthermore, it is logical to ask: why not consider both? Incorporating more predictors can make a model more accurate at prediction, which both Fellingham and Fisher (2017) and this paper are concerned with. The reasons this paper does not consider both is because, especially in a Bayesian context, researchers must be concerned with multicollinearity. Without a doubt there is a strong correlation between the two because one is a subset of the other. In fact, we can see that the correlation between the two is quite strong in (REFERENCE TO CORRELATION BETWEEN AB'S AND PA'S). When multicollinearity is introduced into a model, it can be difficult for the Markov Chain Monte Carlo (MCMC) algorithm to parse out which of the two variables is responsible for the changes in the dependent variable. Thus, we neglect PA's from our model both because theory stipulates it is an inferior predictor and used in tandem with our current predictor it would cause problems for the modeling software.
+Furthermore, it is logical to ask: why not consider both? Incorporating more predictors can make a model more accurate at prediction, which both Fellingham and Fisher (2017) and this paper are concerned with. The reasons this paper does not consider both is because, especially in a Bayesian context, researchers must be concerned with multicollinearity. Without a doubt there is a strong correlation between the two because one is a subset of the other. In fact, we can see that the correlation between the two is quite strong in @fig-BattingCor. When multicollinearity is introduced into a model, it can be difficult for the Markov Chain Monte Carlo (MCMC) algorithm to parse out which of the two variables is responsible for the changes in the dependent variable. Thus, we neglect PA's from our model both because theory stipulates it is an inferior predictor and used in tandem with our current predictor it would cause problems for the modeling software.
 
-An interesting quirk of baseball is that, like soccer, stadiums differ in dimensions. This is not universal; baseball fields and stadiums must have the same measurements for their infields. Yet, for the most part baseball stadiums are allowed to configure their outfields as they please. This becomes important because most HR's are achieved by hitting the baseball over the outfield fence. Thus, fences closer to home plate lead to more HR's from all hitters, ceteris paribus. The non-standardized nature of stadiums' fences gives them a variety of unique shapes and ranging outfield sizes. For example, Fenway Park (1923-) is known to have the closest outfield wall with their "Green Monster" in left field being only 305 ft. from home plate. While the Polo Grounds (1891-1963) boasted one of the furthest walls from home plate at 483 ft. in center field. Stadiums also differ in location. Marlins Park (2012-2020) sits at 15 ft. above sea level while Coors Field (1995-) sits at 5183 ft. above sea level. As illustrated there are not only vastly different dimensions that baseball fields can take on but also different environments which affect a player's ability to hit home runs. Thus, any model which attempts to model players' ability to hit HR's needs to consider ballpark factors.
+An interesting quirk of baseball is that, like soccer, stadiums differ in dimensions. This is not universal; baseball fields and stadiums must have the same measurements for their infields. Yet, for the most part baseball stadiums are allowed to configure their outfields as they please. This becomes important because most HR's are achieved by hitting the baseball over the outfield fence. Thus, fences closer to home plate generally lead to more HR's for all hitters, ceteris paribus. The non-standardized nature of stadiums' fences gives them a variety of unique shapes and ranging outfield sizes. For example, Fenway Park (1923-) is known to have the closest outfield wall with their "Green Monster" in left field being only 305 ft. from home plate. While the Polo Grounds (1891-1963) boasted one of the furthest walls from home plate at 483 ft. in center field. Stadiums also differ in location. Marlins Park (2012-2020) sits at 15 ft. above sea level while Coors Field (1995-) sits at 5183 ft. above sea level. As illustrated there are not only vastly different dimensions that baseball fields can take on but also different environments which affect a player's ability to hit home runs. Thus, any model which attempts to model players' ability to hit HR's needs to consider ballpark factors.
 
 MLB, as we know it, has been played since about 1871 and the origins of the game go back even father than that. Over this time the some rules of the game have undergone incredible transformations which vastly change the nature of the game. For example, from 1900-1920 baseball was in the "deadball era." During this period the materials used to create baseballs made it so that the ball absorbed much more force than it does today. This had a plethora of implications for the game and how it was played; HR's were much less common because they were harder to hit. In contrast, the period from 1994-2004 is known informally as the "steroid era" because of the rampant use of performance enhancing drugs (PED) used by players. This, in combination with other factors such as harder materials used to make baseballs, led to players obliterating a variety of previous hitting records, such as the career and season home runs records. It is obvious from these facts that decade played for player's had a drastic impact on their ability to produce outcomes. In fact, this can be visualized by considering all the runs scored during a given season from 1871-2019 displayed in @fig-RunsByYear.
 
@@ -182,21 +191,12 @@ Finally, we see that Fellingham and Fisher (2017) project the performance of a n
 
 Given all the previous problems with Fellingham and Fisher (2017) mentioned above, there is an argument to be made that a simple generalized linear model (GLM) could be used instead of their complicated Bayesian semiparametric model. While it is true that a GLM could be used to predict HR's of a player it would not nearly be as accurate as a Bayesian model. Nor would it be able to as accurately capture the non-linearities present in the data. This is because the greatest strength of using the Bayesian technique is that it allows for multilevel models to be created. That is, Bayesian models allow for models to "learn" from other players and group certain players when there is not as much data available for them. In turn, this leads to better predictions about players where data is lacking. This "learning" is known as partial pooling, where the model identifies that parameters for each player (or year etc.) probably come from the same distribution but may not share the exact same estimates.
 
-```{r}
-#Code to see if HRPolyFit still runs
-stan(
-  file = "HRPolyFit.stan",
-  data = data.poly.fit,
-  iter = 100
-)
-```
-
 Exploring concretely how our model works will make it clearer than discussing it in the abstract. The current model that we have is the following:
 
 $$
 \begin{align}
-HR_{ni} &\sim Binomial(AB_{ni},p_{ni})\\
-logit(\frac{p_{ni}}{1-p_{ni}}) &= \alpha_{n}+\beta_h+\eta_h+\delta_p+\xi_i
+HR_{ni} &\sim Binomial(AB_{ni},\pi_{ni})\\
+logit(\frac{\pi_{ni}}{1-\pi_{ni}}) &= \alpha_{n}+\beta_h+\eta_h+\delta_p+\xi_i
 \end{align}
 $$
 
@@ -229,7 +229,9 @@ $$
 \end{align}
 $$
 
-In this model, we say that the $HR$'s of player $n$ are binomialy distributed with number of trials for player $n$ are $AB$. The probability of success (hitting a HR) denoted as $p$. Furthermore, we measure $p$ on the logistic scale. We note here that $p$ changes due to a variety of factors. First, we noticed in the data that most hitters hit a HR in about 3 out of every 100 AB's (REFERENCE TO FIGURE WHICH SHOWS AVERAGE HR PER AB IN MLB). Thus, we assume that the underlying probability of any player in the MLB for hitting a HR is about -3.5 on the logit scale, or 0.03 on the standard probability scale.
+In this model, we say that the $HR$'s of player $n$ are binomialy distributed with number of trials for player $n$ are $AB$. The probability of success (hitting a HR) denoted as $\pi$. Furthermore, we measure $\pi$ on the logistic scale. It is obvious from the model that $\pi$ changes due to a variety of factors.
+
+First we must noticed in the data that most hitters hit a HR in about 3 out of every 100 AB's, which can be seen in both @fig-HR.By.Age.20to40, @fig-pDist, and @fig-pDistSmall. Thus, we assume that the underlying probability of any player in the MLB for hitting a HR is about -3.5 on the logit scale, or 0.03 on the standard probability scale.
 
 We recognize that this depends on the hitter which is where the use of a multilevel model becomes useful. Instead of simply using the average probability as our intercept, which is what a dummy variable would do in a GLM, we are able to allow our model choose an intercept which agrees with the data but can adapt depending on the player. Thus, we let $\alpha$ be normally distributed with mean $\mu_0$ (where $\mu_0$ is normally distributed with mean -3.5 and standard deviation 0.1) and standard deviation $\sigma_0$ (where the parameter $\sigma_0$ itself is exponentially distributed).
 
@@ -240,6 +242,8 @@ $\delta_p$ is the effect that a player's home ballpark $p$ has on his underlying
 $\xi_i$ represents the change in the underlying probability of player hitting a HR in the year $i$
 
 EXPLORE THE DATA HERE AND WHY A MULTILEVEL MODEL WORKS BEST
+
+CHOOSE A FEW PLAYERS TO SHOW HOW THE MODEL FIT CHANGES FOR EACH PLAYER
 
 # Results
 
@@ -281,10 +285,20 @@ saveRDS(fit.poly, "PolyFit.rds")
 ```
 
 ```{r}
+#Lets me load in the model that I made. Will only work on my desktop.
+fit.poly <- readRDS("C:/Users/Sam/Desktop/RDS/PolyFit.rds", )
+```
+
+```{r}
 plot(fit.poly, pars="xi")
 ```
 
 # Figures
+
+```{r}
+#| label: fig-BattingCor
+corrplot(cor(Batting_cor), type = "upper", order = "hclust", tl.col = "black", tl.srt = 45)
+```
 
 ```{r}
 #Make the dataframe needed for Runs Scored by year graph
@@ -342,10 +356,12 @@ ggplot(data = HR.Prop.Age %>% filter(Age >=20 & Age <= 40))+
 ```
 
 ```{r}
+#| label: fig-pDist
 ggplot(data = Batting)+
   aes(x = p)+
   geom_histogram(bins = 75)+
   geom_vline(xintercept=median(Batting$p, na.rm = TRUE) , color="red")+
+  scale_x_continuous(n.breaks = 10)+
   labs(title = "Distribution of Players' HR Proportions",
        subtitle = "Seasons Considered: 1973-2019",
        x = "Proportions (p)",
@@ -353,12 +369,13 @@ ggplot(data = Batting)+
 ```
 
 ```{r}
+#| label: fig-pDistSmall
 #I want this to have a little more breaks in the x-axis to highlight where the median is
 ggplot(data = Batting)+
   aes(x = p)+
   geom_histogram(bins = 75)+
   geom_vline(xintercept=median(Batting$p, na.rm = TRUE) , color="red")+
-  xlim(x=c(0,0.15))+
+  scale_x_continuous(n.breaks = 16, limits = c(0,0.15))+
   labs(title = "Constricted View of Distribution of Players' HR Proportions",
        subtitle = "Seasons Considered: 1973-2019",
        x = "Proportions (p)",
