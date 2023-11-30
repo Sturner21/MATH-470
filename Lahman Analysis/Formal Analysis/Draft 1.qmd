@@ -229,7 +229,7 @@ $$
 \end{align}
 $$
 
-In this model, we say that the $HR$'s of player $n$ are binomialy distributed with number of trials for player $n$ are $AB$. The probability of success (hitting a HR) denoted as $\pi$. Furthermore, we measure $\pi$ on the logistic scale. It is obvious from the model that $\pi$ changes due to a variety of factors.
+In this model, we say that the $HR$'s of player $n$ are binomialy distributed with number of trials for player $n$ are $AB$. The probability of success (hitting a HR) denoted as $\pi$. Furthermore, we measure $\pi$ on the logistic scale. It is obvious from the model that $\pi$ changes due to a variety of factors. The first parameter which affects $\pi$ is $\alpha_n$.
 
 First we must noticed in the data that most hitters hit a HR in about 3 out of every 100 AB's, which can be seen in both @fig-HR.By.Age.20to40, @fig-pDist, and @fig-pDistSmall. Thus, we assume that the underlying probability of any player in the MLB for hitting a HR is about -3.5 on the logit scale, or 0.03 on the standard probability scale.
 
