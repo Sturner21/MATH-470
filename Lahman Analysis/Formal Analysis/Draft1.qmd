@@ -263,6 +263,8 @@ CHOOSE A FEW PLAYERS TO SHOW HOW THE MODEL FIT CHANGES FOR EACH PLAYER
 
 # Results {#sec-Results}
 
+In explore results, discuss both the trajectories of about 4-5 players and show how they change (probably want to sample about 10 just to be safe). But then, just for fun, look at which player has the highest $\alpha$ level since that would be my models prediction of best HR hitter independent of everything else. It will probably be Barry Bonds.
+
 ```{r}
 #| eval: false
 
