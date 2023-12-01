@@ -160,20 +160,28 @@ Finally, age is an important factor in athletic ability. To an extent in MLB, se
 
 As mentioned, Fellingham and Fisher (2017) have both considered and published their thoughts on this research question. This research question concerns predicting player home run performance using Bayesian multilevel modeling. To do this, Fellingham and Fisher (2017) used data from the Lahman data set spanning 1871 to 2008 to estimate the parametric weights for their model. Over this time frame they only considered players who had played for at least 6 seasons and who, in each of those seasons, had at least 50 AB's. They only considered seasons where the players were 18-years-old to 45-years-old.
 
-To predict a player's HR's they used a binomial logistic model. This model predicts HR's using the AB's of a player for the $n$ trials and the underlying ability of a player to hit a HR, $\pi$ as their probability of success. Fellingham and Fisher (2017) estimate a player's ability to hit home runs from his age in a season, decade born, season played, and home ball park. This leaves Fellingham and Fisher with the following model:
+To predict a player's HR's they used a binomial logistic model. This model predicts HR's using the AB's of a player for the $n$ trials and the underlying ability of a player to hit a HR, $\pi$ as their probability of success. Fellingham and Fisher (2017) estimate a player's ability to hit home runs from his age in a season, decade born, season played, and home ball park. This leaves Fellingham and Fisher with the following model, which we have adapted to make model parameters the same across both their model and my model (in @sec-Model):
 
 $$
 \begin{align}
 HR_{nip}|\pi_{nip}&\sim Binomial(AB_{nip},\pi_{nip})\\
 \\
-logit(\frac{\pi_{nip}}{1-\pi_{nip}})&=\beta_{n1}\cdot Age_{ni}+\beta_{n2}\cdot(Age_{ni})^2+\beta_{n3}\cdot(Age_{ni})^3+\beta_{n4}\cdot(Age_{ni})^4+\alpha_n+\delta_i
+\log(\frac{\pi_{nip}}{1-\pi_{nip}})&=[\beta_{n1}\cdot Age_{ni}]+[\beta_{n2}\cdot(Age_{ni})^2]+[\beta_{n3}\cdot(Age_{ni})^3]+[\beta_{n4}\cdot(Age_{ni})^4]+\alpha_n+\delta_i
 +\xi_p
 \end{align}
 $$
 
-Where $h_{ij}$ is the HR by a player $i$ in year $j$, $\pi_{ij}$ is the probability of a HR for player $i$ in year $j$, $ab$ is the number of AB's for player $i$ in year $j$, $x_{ij}$ and $\beta_i$ are vectors of the associated weights of the orthogonal quartic polynomial for a player's age on HR probabilities, $\theta_i$ is the effect of decade of birth, $\delta_j$ is the effect of season of play, and $\xi_p$ is the effect of the home ballpark.
+Where $HR_{nip}$ is the HR's hit by a player $n$ in year $i$ played at stadium $p$. $AB_{nip}$ is the AB's for player $n$ in year $i$ at stadium $p$. $\pi_{nip}$ is the probability of a HR in an AB for player $n$ in year $i$ at stadium $p$.
 
-What makes this model so strange are the priors that Fellingham and Fisher (2017) chose. Disregarding that there is no justification for these priors, Fellingham and Fisher (2017) set the following priors for these parameters:
+The parameter's $\beta_{n,1-4}$ describe the weights of the orthogonal polynomial for, up to the quartic, ages of players. We theorize, because Fellingham and Fisher (2017) did not explicitly articulate why, that they chose a quartic model because it has a closer fit to the data displayed in @fig-HR.By.Age.All and @fig-HR.By.Age.20to40. The properties of a squared term is that it captures the rise and fall of player's HR probability. However, the inclusion of the cubic and quartic term allow for for modeling two humps, or peaks, in a data set. This appears in @fig-HR.By.Age.20to40 where players see a peak at 27 and then their probability decreases a little, which is then followed by another peak at 31, and afterwards continues in a downward trend. This will be discussed in more depth in @sec-Model, but our model which aims to improve Fellingham and Fisher's (2017) model does not account for the cubic or quartic effects over fear of over-fitting the age data.
+
+The parameter $\alpha_n$ (which is $\theta_i$ in the actual paper) are the individual intercepts for each player. This parameter is the only one that Fellingham and Fisher (2017) use which takes advantage of multilevel modeling. In this modeling, Fellingham and Fisher (2017) set the mean of $\alpha_n$ to be $\mu_d$ where $d$ is the decade the player was born. That means that Fellingham and Fisher (2017) set the parameter which measures the player's "innate" HR probability based on the HR probability of other players, who were born in the same decade. This allows Fellingham and Fisher (2017) to fit make confident predictions about players who may have only played for 6 seasons because they know that their model is trained on more than 6 data points. This parameter, $\alpha_n$ along with $\beta_{n,1-4}$ represent the player specific terms of the model. That is, the parameters of the model which depend solely on the player being considered.
+
+In contrast, the parameter $\delta_i$ represents the effect that season $i$ has on player $n$'s ability to hit a HR at stadium $p$. This $\delta$ is calculated for each season considered where $i\in\{1,…,138\}$ for the 138 seasons considered. This $\delta_i$ is calculated independent of each player so it represents the different changes that we see in HR ability over all years considered. An example of why this effect is important refer to @fig-HRByYear.
+
+The parameter $\xi_p$ is the effect that playing in park $p$ has on the HR probability $\pi_{nip}$ in year $i$. Fellingham and Fisher (2017) decided that they want this estimate to independent of the hitter. Hence, they use no pooling or multilevel effects in the model. They estimate the effect that each park has on a player's ability to hit a HR and then add the associated effect to the players who play at that ballpark.
+
+What makes Fellingham and Fisher's model so strange are the priors that Fellingham and Fisher (2017) chose. Disregarding that there is no justification for these priors, Fellingham and Fisher (2017) set the following priors for these parameters:
 
 $$
 \begin{align}
@@ -189,7 +197,7 @@ $$
 \end{align}
 $$
 
-These priors are quite strange because they are so broad. For example, consider the priors on either $\delta_j$ or $\xi_p$. The priors state that on a logistic scale, it is normal for the decade of birth and season of play parameters to vary along the interval \[-6.5, 1.5\]. On the normal probability scale, this corresponds to probability fluctuations of about (0.0015, 0.81). Surely there must be better priors than this which Fellingham and Fisher (2017) could have used. Coincidentally, this is probably why in using MCMC to estimate their parameters they needed to use 200,000 iterations. Likely, their model could have estimated their parameters much more easily had they given stronger priors. This is one of the areas this paper seeks to improve Fellingham and Fisher's (2017) methods.
+These priors are quite strange because they are so broad. For example, consider the priors on either $\delta_j$ or $\xi_p$. The priors state that on a logistic scale, it is normal for the decade of birth and season of play parameters to vary along the interval \[-6.5, 1.5\]. On the normal probability scale, this corresponds to probability fluctuations of about (0.0015, 0.81). Furthermore, if you only consider the means that Fellingham and Fisher have used here, then you would be left with a player who, on the logit scale, hits HR's at a probability of -7.5. On the normal probability scale this becomes about 0.00055, which is 0.055% chance any AB ends in a HR. Confusingly, this is not even close to the 2.8% that Fellingham and Fisher (2017) even noted in their paper. Surely there must be better priors than this which Fellingham and Fisher (2017) could have used since it does not seem that even they believe these priors that they have set. Coincidentally, this is probably why in using MCMC to estimate their parameters they needed to use 200,000 iterations. Likely, their model could have estimated their parameters much more easily had they given stronger priors. This is one of the areas this paper seeks to improve Fellingham and Fisher's (2017) methods.
 
 Another questionable choice that Fellingham and Fisher (2017) make is that they estimated their model parameters using FORTRAN. Given the antiquity of FORTRAN, replication of Fellingham and Fisher (2017) is quite difficult. Not to mention that the 200,000 iterations makes the research so computationally expensive that it makes it nearly impossible for any other research team to replicate. This is disappointing because the scientific method relies on replication for the advancement of knowledge. Thus, our research seeks to make the algorithms used in this research more accessible because we chose to use R to interface with the modeling software Stan, which is written in the (more contemporary) C++ programming language.
 
@@ -204,7 +212,7 @@ Exploring concretely how our model works will make it clearer than discussing it
 $$
 \begin{align}
 HR_{nip} &\sim Binomial(AB_{nip},\pi_{nip})\\
-\log(\pi_{nip}) &= \alpha_{n}+\beta_n\cdot (Age_{ni}-30)+\eta_n\cdot (Age_{ni}-30)^2+\delta_p+\xi_i
+\log(\frac{\pi_{nip}}{1-\pi_{nip}}) &= \alpha_{n}+\beta_n\cdot (Age_{ni}-30)+\eta_n\cdot (Age_{ni}-30)^2+\delta_p+\xi_i
 \end{align}
 $$
 
