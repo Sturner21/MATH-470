@@ -164,9 +164,9 @@ To predict a player's HR's they used a binomial logistic model. This model predi
 
 $$
 \begin{align}
-h_{ij}|\pi_{ij}&\sim Binomial(ab_{ij},\pi_{ij})\\
+HR_{nip}|\pi_{nip}&\sim Binomial(AB_{nip},\pi_{nip})\\
 \\
-logit(\frac{\pi_{ij}}{1-\pi_{ij}})&=x_{ij}\beta_{i}+\theta_i+\delta_j
+logit(\frac{\pi_{nip}}{1-\pi_{nip}})&=\beta_{n1}\cdot Age_{ni}+\beta_{n2}\cdot(Age_{ni})^2+\beta_{n3}\cdot(Age_{ni})^3+\beta_{n4}\cdot(Age_{ni})^4+\alpha_n+\delta_i
 +\xi_p
 \end{align}
 $$
@@ -177,15 +177,15 @@ What makes this model so strange are the priors that Fellingham and Fisher (2017
 
 $$
 \begin{align}
-\theta_i&\sim Normal(\mu_d,\sigma^2_{d_i}), d\in \{1...14\}, i\in\{1,...,3735\}\\
+\alpha_n&\sim Normal(\mu_{d_n},\sigma^2_{d_n}), d\in \{1...14\}, n\in\{1,...,3735\}\\
 \\
-\mu_d&\sim Normal(-2.5,var=1), d_i\in\{1,...,14\}\\
+\mu_d&\sim Normal(-2.5,1), d\in\{1,...,14\}\\
 \\
-\sigma^2_{d_i}&\sim Gamma(3,3), d_i\in\{1,...14\} \\
+\sigma^2_{d}&\sim Gamma(3,3), d\in\{1,...14\} \\
 \\
-\delta_j&\sim Normal(-2.5, var=4),j\in \{1,...,138\}\\
+\delta_i&\sim Normal(-2.5, 2),i\in \{1,...,138\}\\
 \\
-\xi_p&\sim Normal(-2.5, var=4), p\in \{1,...,222\}\\
+\xi_p&\sim Normal(-2.5, 2), p\in \{1,...,222\}\\
 \end{align}
 $$
 
@@ -203,8 +203,8 @@ Exploring concretely how our model works will make it clearer than discussing it
 
 $$
 \begin{align}
-HR_{ni} &\sim Binomial(AB_{ni},\pi_{ni})\\
-logit(\frac{\pi_{ni}}{1-\pi_{ni}}) &= \alpha_{n}+\beta_h+\eta_h+\delta_p+\xi_i
+HR_{nip} &\sim Binomial(AB_{nip},\pi_{nip})\\
+\log(\pi_{nip}) &= \alpha_{n}+\beta_n\cdot (Age_{ni}-30)+\eta_n\cdot (Age_{ni}-30)^2+\delta_p+\xi_i
 \end{align}
 $$
 
