@@ -1,5 +1,5 @@
 ---
-title: "Bayesian Data Analysis - Rough Draft"
+title: "Bayesian Data Analysis, Rough Draft"
 author: "Sam Turner"
 date: today
 format: 
@@ -24,6 +24,7 @@ library(Lahman)
 library(bayesplot)
 library(tidybayes)
 library(corrplot)
+library(boot)
 ```
 
 ```{r}
@@ -139,11 +140,11 @@ head(Samp_Batting)
 #If curious, this seed and selection covers all years. So, it should be able to handle the year-to-year effects
 ```
 
-# Introduction and Motivations
+# Introduction and Motivations {#sec-intro}
 
 To apply the methods discussed in *Statistical Rethinking* by Richard McElreath, Dr. Parson and I decided to replicate *Predicting Home Run Production in Major League Baseball Using a Bayesian Semiparametric Model* by Gilbert Fellingham and Jared Fisher. This article in particular has drawn our attention because of some unique and interesting modeling choices made by the authors. Both Dr. Parson and I believe that the initial investigation by Fellingham and Fisher (2017) is interesting, but there are some questionable modeling choices made by the authors throughout the paper. For example, there are few predictor variables and their associated priors are very weak. The paper does a good job with displaying plenty of visualizations for the reader, yet, under careful examination one is left with the impression that the authors have chosen to display a non-random assortment of players. This leaves careful readers wondering if the validity of their model is constant across all players, or if they have chosen a certain subset because these special players justify the use of their model. These reasons in tandem bring Fellingham and Fisher's (2017) findings into question. Thus, Dr. Parson and I have embarked to investigate the same research question as them: can we use a multilevel Bayesian model to predict a player's home run performance?
 
-## Baseball Background
+## Baseball Background {#sec-BaseBack}
 
 In Major League Baseball (MLB) the team on offense is allowed to send one player, at a time, up to home plate to "bat." Any time a player is sent up to bat this constitutes a plate appearance (PA). Depending on the outcome of the PA it may or may not be considered an at-bat (AB). If the PA ends in the player being walked (BB \[Base on Balls\]) then it is not recorded as an AB because it is thought the player did not receive a fair chance at hitting the baseball. On the other hand, if the PA ends in the player getting a hit or getting out, then it is assumed that he had a fair chance at hitting the ball and the PA is recorded as an AB. This distinction to the average fan is mostly arbitrary. However, in a modeling context it is very important. When modeling a player's ability to hit home runs (HR), as this paper is concerned with, the distinction is important because it is unfair to consider all the PA's of a player because this set of outcomes includes outcomes where it is assumed that the player has not been given a fair chance to hit the ball. For similar reasons, considering the subset of outcomes where it is assumed that they player has been given a fair chance to hit the ball seems more appropriate, this subset is AB's. Thus, this paper uses AB's as the main predictor for home runs hit by a certain player. Fellingham and Fisher (2017) also agree with this reasoning and use AB's, rather than PA's, in their research.
 
@@ -155,7 +156,7 @@ MLB, as we know it, has been played since about 1871 and the origins of the game
 
 Finally, age is an important factor in athletic ability. To an extent in MLB, seniority can act both as a blessing and a curse. On the one hand, older players are less able to hit home runs because their body is starting to lose its peak athletic performance it had when it was, say, 30. On the other hand, these older players also have more experience than younger players and thus may be better able to hit home runs from strategies they have found during their time playing. Further we can visualize this by looking at the median home runs hit by each player from 1871-2022, which is displayed in @fig-HR.By.Age.All. However, this graph does not depict some of the nuances of the data well. For example, we have almost no data on how often 18 -year-olds hit HR's because they play in MLB infrequently. As can be seen with the standard error bars on the ages above 40, older players suffer a similar problem of small sample size. Instead, consider @fig-HR.By.Age.20to40 which shows only considers players who are 20-40 years old during the season. This graph clearly shows the complex non-linear relationship between player performance and age. It shows that players are generally improving in their ability to hit HR's from 20-30 years old. Then, however, we see a slight downwards trend followed by an upward trend with increasing error bars. This shows that as players age past 30 their abilities start to decline. However, the jump afterwards can probably be attributed to players who are very good, continuing their careers. If a player is very good then they are going to be able to perform at above average when they are, say, 35. However, if the player is not generally considered good, then a team will likely opt to try out a new young rookie who may not be as good in the moment but is more projectable. Thus, we see less players playing past 35 which explains the higher standard errors, but they are of a higher caliber than any other age group which is why they are still playing, thus we see their proportion as higher.
 
-## Literature Review
+## Literature Review {#sec-LitReview}
 
 As mentioned, Fellingham and Fisher (2017) have both considered and published their thoughts on this research question. This research question concerns predicting player home run performance using Bayesian multilevel modeling. To do this, Fellingham and Fisher (2017) used data from the Lahman data set spanning 1871 to 2008 to estimate the parametric weights for their model. Over this time frame they only considered players who had played for at least 6 seasons and who, in each of those seasons, had at least 50 AB's. They only considered seasons where the players were 18-years-old to 45-years-old.
 
@@ -194,7 +195,7 @@ Another questionable choice that Fellingham and Fisher (2017) make is that they 
 
 Finally, we see that Fellingham and Fisher (2017) project the performance of a number of players from their considered 3,735. However, upon closer inspection these players do not seem to be randomly selected because the selected players were pretty renown during their prime. Nor, does Fellingham and Fisher (2017) make the assurance that these players are randomly selected. This should leave readers with unease because it is unclear how well their model fits most players, which seemed to be what the paper was trying to investigate. Although unlikely, it is conceivable that they only selected players which make their model appear the most reliable. Instead, our paper seeks to remedy this by considering a random assortment of players to examine the fit of our model.
 
-# Model
+# Model {#sec-Model}
 
 Given all the previous problems with Fellingham and Fisher (2017) mentioned above, there is an argument to be made that a simple generalized linear model (GLM) could be used instead of their complicated Bayesian semiparametric model. While it is true that a GLM could be used to predict HR's of a player it would not nearly be as accurate as a Bayesian model. Nor would it be able to as accurately capture the non-linearities present in the data. This is because the greatest strength of using the Bayesian technique is that it allows for multilevel models to be created. That is, Bayesian models allow for models to "learn" from other players and group certain players when there is not as much data available for them. In turn, this leads to better predictions about players where data is lacking. This "learning" is known as partial pooling, where the model identifies that parameters for each player (or year etc.) probably come from the same distribution but may not share the exact same estimates.
 
@@ -236,23 +237,23 @@ $$
 \end{align}
 $$
 
-In this model, we say that the $HR$'s of player $n$ are binomialy distributed with number of trials for player $n$ are $AB$. The probability of success (hitting a HR) denoted as $\pi$. Furthermore, we measure $\pi$ on the logistic scale. It is obvious from the model that $\pi$ changes due to a variety of factors. The first parameter which affects $\pi$ is $\alpha_n$.
+In this model, we say that the $HR$'s of player $n$ follow a binomial distribution with number of trials for player $n$ in season $i$ are $AB_{ni}$. The probability of success (hitting a HR) denoted as $\pi_{ni}$ for player $n$ in season $i$. Furthermore, we measure $\pi$ on the logistic scale.
 
-First we must noticed in the data that most hitters hit a HR in about 3 out of every 100 AB's, which can be seen in both @fig-HR.By.Age.20to40, @fig-pDist, and @fig-pDistSmall. Thus, we assume that the underlying probability of any player in the MLB for hitting a HR is about -3.5 on the logit scale, or 0.03 on the standard probability scale.
+As discussed in @sec-BaseBack, there are many factors that influence player $n$'s underlying probability of hitting a $HR$ in a given $AB$ during season $i$. The first parameter which affects $\pi$ is $\alpha_n$. In our model $\alpha_n$ can be generally thought of as the term which is used to account for most player's innate ability to hit HR's. This comes from our exploratory observations of the data. In @fig-HR.By.Age.20to40, @fig-pDist, and @fit-pDistSmall, we noticed that the average (median or mean) proportion of AB's which resulted in HR's to be about 0.03. This means that about 3 in every 100 AB's result in HR's. On the logit scale, which is what our model relies on, this is about -3.5. However, we recognize this depends on the hitter which is where multilevel modeling becomes useful. Instead of simply using the average probability as our intercept, which is what a dummy variable would do in a GLM, we are able to allow our model choose an intercept which agrees with the data but can adapt depending on the player. Thus, we let $\alpha$ be normally distributed with mean $\mu_0$ (where $\mu_0$ is normally distributed with mean -3.5 and standard deviation 0.1) and standard deviation $\sigma_0$ (where the parameter $\sigma_0$ itself is exponentially distributed). By allowing $\mu_0$ and $\sigma_0$ to have their own distributions, we are able to have the distribution of $\alpha_n$ adapt to the player's specific underlying probability of hitting HR's. That is, we are able to consider what can be most closely considered their innate ability because this estimate for $\alpha_n$ does not account for other considered factors, such as age, park factors, or year played.
 
-We recognize that this depends on the hitter which is where the use of a multilevel model becomes useful. Instead of simply using the average probability as our intercept, which is what a dummy variable would do in a GLM, we are able to allow our model choose an intercept which agrees with the data but can adapt depending on the player. Thus, we let $\alpha$ be normally distributed with mean $\mu_0$ (where $\mu_0$ is normally distributed with mean -3.5 and standard deviation 0.1) and standard deviation $\sigma_0$ (where the parameter $\sigma_0$ itself is exponentially distributed).
+The next parameter we considered which affects $\pi_{ni}$ was $\beta_h$ which represents the effect age $h$, on the centered scale, has on a player's ability to hit HR's. This topic was briefly touched upon in @sec-BaseBack, where we discussed how player age can impact their their strategy and physical prowess. These ideas are well demonstrated in @fig-HR.By.Age.20to40. In @fig-HR.By.Age.20to40, one can easily see that, in general, players ability to hit HR's improves over the course of their career. As a note, we centered the the age of the all players at 30 because not only was that roughly the mean and the median, but also because it makes interpreting the $\beta_h$ easier. The value of $\beta_h$ represents how changes away from the centered age affect player $n$'s probability of hitting a HR, $\pi_{ni}$. In normal GLM's, $\beta_h$ would be general to age, meaning that there would be one intercept for each age that fit all players in the data the best. However, as with $\alpha_n$, we have employed a multilevel model to allow for each $\beta_h$ to be specific to each player. It becomes more difficult to interpret the values of $\beta_h$ because they correspond to the multiplicative effect of the centered age index. That is, in calculating the value of $\beta_h$, our model considers the priors we have set with $\mu_1$ and $\sigma_1$ to create a distribution for $\beta_h$ and then multiplies this $\beta$ with our centered age value $h$. In essence, this means that our $\beta_h$ describes the multiplicative effect of being a certain distance from the centered age, and how that effects player's $\pi$. Another important note, is that although this effect of $\beta$ is multiplicative with respect to the player's index, $h$, it is additive with respect to $\alpha$ and therefore $\pi$. This means that the whatever the model predicts for $\beta_h$ and its weight, it must be added to $\alpha_n$ to generate the correct $\pi$.
 
-$\beta_h$ the effect that a player being age $h$ has on HR probability. Similarly $\eta_h$ is the effect that a player's age squared has on the probability of a HR in an AB. This squared term captures the non-linearity of HR as player's age.
+Similarly $\eta_h$ is the effect that a player's age squared has on the probability of a HR in an AB. The purpose of this squared term is to capture the non-linearity of HR as player's age. It is apparent in both @fig-HR.By.Age.20to40 and @fig-HR.By.Age.All that there is a non-linear effect of age on a player's ability to hit HR's. This ability appears to peak about when the player is 30-years-old. We include $\eta_h$ in the model to capture this downward trend that we see after a player reaches 30-years-old. It is nearly impossible to interpret what $\eta_h$ is doing because it is the multiplicative effect of the player's centered age squared. This begs the question, what even is a squared age? How does one interpret it? There is not a clear answer on this question, so it is best understood that this term simply accounts for the non-linearity we see in the data and not become too concerned with what the actual estimates are. However, it is easy to justify our choice for the priors on $\eta_h$, $\mu_2$ and $\sigma_2$. We chose $\mu_2\sim Normal(0,0.01)$ because we assumed that there would be a negative effect so small that it would be very close to zero. Further, any distinction to the slightly negative of zero would be hard to justify and, in essence, arbitrary. Therefore, we went with the mean of 0 and the standard deviation of 0.01 to account for any players who have a more or less extreme non-linearity to their trajectories. That is, higher or lower peaks and troughs throughout their career for their probability $\pi$. We chose $\sigma_2\sim Exponential(100)$ because standard deviations cannot be negative, which the exponential distribution lends itself nicely to. Furthermore, the exponential distribution with a parameter of 100 is very concentrated. Since we know that the coefficient of $\eta_h$ is likely to be very small since it is being multiplied by the age squared (which can be up over 100). Thus, we can be confident that our standard deviation will end up being small for our estimate.
 
-$\delta_p$ is the effect that a player's home ballpark $p$ has on his underlying probability of hitting a home run.
+Another parameter to consider the the effect that playing in certain ballparks has on HR probability $\pi$. This was discussed in @sec-BaseBack, where we highlighted that players in certain ballparks are more likely to hit HR's than in others because of the different dimensions of the outfield fences. Furthermore, we know that these parks will effect players on different teams differently because of how schedules are created. Players will play half of their games at their home-stadium and the other half at various other ballparks known as "on the road." Thus, the home stadium that player plays at is an important factor for their HR probability $\pi$. In our model, we have estimated the effect that each ballpark has on player's playing in that ballpark. Stadiums like Great American Ballpark (index=33) tend to have a better HR effect than stadiums such as Cleveland Stadium (index=19). We account for this difference in our model with the parameter $\delta_p$ where $\delta$ is the effect that park $p$ has on a player's HR probability $\pi$. Interpreting $\delta_p$ is much easier than the previous two parameters. It simply states, on the logit scale, how the park effects the underlying probability of hitting a HR, $\pi$. Similar to $\alpha_n$ this effect is additive and can act almost like an intercept in the model. It also takes advantage of multilevel modeling since we have set priors which can adapt to the data on it, $\mu_5$ and $\sigma_5$. We have purposely set the parameter for $\mu_5\sim Normal(0,0.01)$ with mean 0 because we assume that parks in the aggregate will not have an effect on a player's ability to hit HR's. That is, for every Cleveland Stadium there exists a Great American Ballpark to counteract this. There is no formal justification for this, it is just an assumption that we make based on our preliminary exploration and our understanding that ownership (who controls the dimensions of the stadium) are not particularly biased to any ballpark size which means that we should see good variation between parks. Further, we assume that a fair standard deviation for $\mu_5$ is 0.01 because on the logistic scale, this means that we could see about a two percent change in the probabilities between any given stadiums. At most we would see a 4% difference. We chose a standard deviation for $\delta_p$ of $\sigma_5\sim Exponential(10)$ for similar reasons to all of the other $\sigma$'s. The exponential distribution cannot be negative, which we need for standard deviations. Further, we know that the effect of each park will probably not be huge because, although there is deviation, there is not extreme deviation between parks that makes some "unfair." Thus, with our parameter of 10 for the exponential distribution we are being fairly confident with our model about our estimates of the priors.
 
-$\xi_i$ represents the change in the underlying probability of player hitting a HR in the year $i$
+Our final parameter, $\xi_i$ represents the change in the underlying probability of player hitting a HR in the year $i$. This stems mostly from the observation in @fig-HRByYear which shows a steep increase in the amount of HR's hit per year across any subset of years considered. This means that there is an underlying change in the $\pi$ depending on the year considered. The reason for this change is irrelevant. It could be because batters are becoming better or pitchers are getting worse, or some combination of the two. Regardless, we can see that there is an increase and we need to account for this in our estimates for $\pi$ of player $n$. Thus, we include $\xi_i$ to represent the effect that playing in a certain year will have on the player's ability to hit a HR. We set the mean of $\xi_i$ as $\mu_6\sim Normal(0, 0.25)$ because we can see that the HR proportion change year over year in @fig-pByYear by only fractions of a percent. Thus, when we set our prior with mean 0 and standard deviation of 0.25, we are saying that we expect most year of year variation to be from \[-4, -3\] on the logit scale. On the normal this is \[0.018, 0.047\] which means that we would expect at most a change of 3% year over year. This is much larger than we would actually anticipate in a change but it allows the model to learn from the data to learn from the data more since we are unsure of exactly what the change beyond knowing that there is a change year over year.
 
 EXPLORE THE DATA HERE AND WHY A MULTILEVEL MODEL WORKS BEST
 
 CHOOSE A FEW PLAYERS TO SHOW HOW THE MODEL FIT CHANGES FOR EACH PLAYER
 
-# Results
+# Results {#sec-Results}
 
 ```{r}
 #| eval: false
@@ -297,10 +298,16 @@ fit.poly <- readRDS("C:/Users/Sam/Desktop/RDS/PolyFit.rds", )
 ```
 
 ```{r}
-plot(fit.poly, pars="xi")
+#| eval: false
+plot(fit.poly, pars="delta")
 ```
 
-# Figures
+```{r}
+#| eval: false
+print(fit.poly, pars="delta")
+```
+
+# Figures {#sec-Figures}
 
 ```{r}
 #| label: fig-BattingCor
@@ -328,6 +335,38 @@ ggplot(data = Runs.By.Year)+
   labs(title = "Cumulative Runs Scored in MLB by Year",
        x = "Year",
        y = "Runs Scored")
+```
+
+```{r}
+HomeRuns.By.Year <- Lahman::Teams %>% 
+  group_by(yearID) %>% 
+  summarize(HR = sum(HR),
+            AB = sum(AB)) %>% 
+  mutate(p = HR / AB)
+```
+
+```{r}
+#| label: fig-HRByYear
+#| fig-cap: "Cumulative Home Runs in MLB by Year"
+ggplot(data = HomeRuns.By.Year)+
+  aes(x=yearID, y=HR)+
+  geom_line()+
+  scale_x_continuous(n.breaks = 20)+
+  labs(title = "Cumulative Home Runs in MLB by Year",
+       x = "Year",
+       y = "Home Runs - League Cumulative")
+```
+
+```{r}
+#| label: fig-pByYear
+#| fig-cap: "Cumulative Home Run Probability in MLB by Year"
+ggplot(data = HomeRuns.By.Year)+
+  aes(x=yearID, y=p)+
+  geom_line()+
+  scale_x_continuous(n.breaks = 20)+
+  labs(title = "Cumulative Home Run Probability in MLB by Year",
+       x = "Year",
+       y = "HR Proportion (HR/AB) - League Cumulative")
 ```
 
 ```{r}
