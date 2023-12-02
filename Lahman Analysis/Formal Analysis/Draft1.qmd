@@ -19,6 +19,7 @@ execute:
 #| warning: false
 
 library(tidyverse)
+library(scales)
 library(rstan)
 library(Lahman)
 library(bayesplot)
@@ -340,6 +341,10 @@ select_players_Batting <- Batting %>%
 #select_players_Batting
 ```
 
+```{r}
+#As a warning to all who are going to be running this in the future: even calculating the parameters from the model (alpha, beta, eta, and xi) are computationally expensive. They take a good chunk of time to calculate which makes rendering the document take a couple minutes.
+```
+
 ## Robin Yount
 
 ```{r}
@@ -472,9 +477,151 @@ i582.Trajectory <- Batting %>%
 
 See @fig-p582Act and @fig-p582Pred.
 
-```{r}
+## Junior Felix
 
+```{r}
+# Junior Felix (177) Estimates cell
+
+#Find out what parks player 177 played in over his career
+i177_park <- Batting %>% 
+  filter(player_index == 177) %>% 
+  distinct(park_index) %>% 
+  pull(park_index)
+
+#Find our what years player 177 played in over his career
+i177_year <- Batting %>% 
+  filter(player_index == 177) %>% 
+  distinct(year_index) %>% 
+  pull(year_index)
+
+#Find the all the associated parameters needed for to predict model of player 177
+#These first three are specfic estimates for 177
+alpha_i177 <- fit.poly %>% 
+  spread_draws(alpha[group]) %>% 
+  summarise_draws() %>% 
+  filter(group==177)
+
+beta_i177 <- fit.poly %>% 
+  spread_draws(beta[group]) %>% 
+  summarise_draws() %>% 
+  filter(group==177)
+
+eta_i177 <- fit.poly %>% 
+  spread_draws(eta[group]) %>% 
+  summarise_draws() %>% 
+  filter(group==177)
+
+#Meanwhile, this value corresponds to the park
+delta_i177 <- fit.poly %>% 
+  spread_draws(delta[group]) %>% 
+  summarise_draws() %>% 
+  filter(group %in% i177_park)
+
+#And this value corresponds to the years that he played
+xi_i177 <- fit.poly %>% 
+  spread_draws(xi[group]) %>% 
+  summarise_draws() %>% 
+  filter(group %in% i177_year)
 ```
+
+```{r}
+#Create the trajectory DF for player 177
+i177.Trajectory <- Batting %>% 
+  #Grab the player we're interested in
+  filter(player_index == 177) %>% 
+  #Only keep columns we're interested in
+  select(playerID, player_index, yearID, year_index, Age, cAge, cAgeSq, AB, HR, p, park_index) %>%
+  #Put the alpha, beta, and eta parameters in the DF
+  mutate(alpha = alpha_i177 %>% pull(mean), .after = player_index) %>%
+  mutate(beta = beta_i177 %>% pull(mean), .after = cAge) %>%
+  mutate(eta = eta_i177 %>% pull(mean), .after = cAgeSq) %>%
+  #Set-up to add "delta" to the table because 177 may have been traded
+  right_join(delta_i177 %>% select(group, mean), by = join_by(park_index==group)) %>% 
+  mutate(delta = mean, .after = park_index) %>% 
+  select(!mean) %>% 
+  #Set-up to add "xi" to the table because 177 may have been traded
+  right_join(xi_i177 %>% select(group, mean), by = join_by(year_index==group)) %>% 
+  mutate(xi = mean, .after = year_index) %>% 
+  select(!mean) %>% 
+  #Create the predictions for the player
+  mutate(pred = alpha + (beta*cAge) + (eta*cAgeSq) + (delta) + (xi) , .after = p) %>% 
+  mutate(inv_logit_pred = inv.logit(pred), .after=pred)
+```
+
+See @fig-p177Act and @fig-p177Pred.
+
+## Kendrys Morales
+
+```{r}
+# Kendrys Morales (420) Estimates cell
+
+#Find out what parks player 420 played in over his career
+i420_park <- Batting %>% 
+  filter(player_index == 420) %>% 
+  distinct(park_index) %>% 
+  pull(park_index)
+
+#Find our what years player 420 played in over his career
+i420_year <- Batting %>% 
+  filter(player_index == 420) %>% 
+  distinct(year_index) %>% 
+  pull(year_index)
+
+#Find the all the associated parameters needed for to predict model of player 420
+#These first three are specfic estimates for 420
+alpha_i420 <- fit.poly %>% 
+  spread_draws(alpha[group]) %>% 
+  summarise_draws() %>% 
+  filter(group==420)
+
+beta_i420 <- fit.poly %>% 
+  spread_draws(beta[group]) %>% 
+  summarise_draws() %>% 
+  filter(group==420)
+
+eta_i420 <- fit.poly %>% 
+  spread_draws(eta[group]) %>% 
+  summarise_draws() %>% 
+  filter(group==420)
+
+#Meanwhile, this value corresponds to the park
+delta_i420 <- fit.poly %>% 
+  spread_draws(delta[group]) %>% 
+  summarise_draws() %>% 
+  filter(group %in% i420_park)
+
+#And this value corresponds to the years that he played
+xi_i420 <- fit.poly %>% 
+  spread_draws(xi[group]) %>% 
+  summarise_draws() %>% 
+  filter(group %in% i420_year)
+```
+
+```{r}
+#Create the trajectory DF for player 420
+i420.Trajectory <- Batting %>% 
+  #Grab the player we're interested in
+  filter(player_index == 420) %>% 
+  #Only keep columns we're interested in
+  select(playerID, player_index, yearID, year_index, Age, cAge, cAgeSq, AB, HR, p, park_index) %>%
+  #Put the alpha, beta, and eta parameters in the DF
+  mutate(alpha = alpha_i420 %>% pull(mean), .after = player_index) %>%
+  mutate(beta = beta_i420 %>% pull(mean), .after = cAge) %>%
+  mutate(eta = eta_i420 %>% pull(mean), .after = cAgeSq) %>%
+  #Set-up to add "delta" to the table because 420 may have been traded
+  right_join(delta_i420 %>% select(group, mean), by = join_by(park_index==group)) %>% 
+  mutate(delta = mean, .after = park_index) %>% 
+  select(!mean) %>% 
+  #Set-up to add "xi" to the table because 420 may have been traded
+  right_join(xi_i420 %>% select(group, mean), by = join_by(year_index==group)) %>% 
+  mutate(xi = mean, .after = year_index) %>% 
+  select(!mean) %>% 
+  #Create the predictions for the player
+  mutate(pred = alpha + (beta*cAge) + (eta*cAgeSq) + (delta) + (xi) , .after = p) %>% 
+  mutate(inv_logit_pred = inv.logit(pred), .after=pred)
+```
+
+See @fig-p420Act and @fig-p420Pred.
 
 # Figures {#sec-Figures}
 
@@ -533,6 +680,7 @@ ggplot(data = HomeRuns.By.Year)+
   aes(x=yearID, y=p)+
   geom_line()+
   scale_x_continuous(n.breaks = 20)+
+  scale_y_continuous(labels = label_percent())+
   labs(title = "Cumulative Home Run Probability in MLB by Year",
        x = "Year",
        y = "HR Proportion (HR/AB) - League Cumulative")
@@ -553,6 +701,7 @@ HR.Prop.Age <- Batting %>%
 ggplot(data = HR.Prop.Age)+
   geom_pointrange(mapping = aes(x = Age, y = prop, ymin = prop - prop.se,
                                 ymax = prop + prop.se))+
+  scale_y_continuous(labels = label_percent())+
   labs(title = "Proportion of Home Runs per At-Bat by Age",
        x = "Age",
        y = "Proportion of HR per AB")
@@ -565,6 +714,7 @@ ggplot(data = HR.Prop.Age)+
 ggplot(data = HR.Prop.Age %>% filter(Age >=20 & Age <= 40))+
   geom_pointrange(mapping = aes(x = Age, y = prop, ymin = prop - prop.se,
                                 ymax = prop + prop.se))+
+  scale_y_continuous(labels = label_percent())+
   labs(title = "Proportion of Home Runs per At-Bat by Age",
        x = "Age",
        y = "Proportion of HR per AB")
@@ -603,6 +753,7 @@ ggplot(data = select_player_Batting)+
   aes(x = cAge, y = p)+
   geom_point()+
   geom_smooth()+
+  scale_y_continuous(labels = label_percent())+
   labs(title = "Actual Trajectory for player #651")
 ```
 
@@ -612,6 +763,7 @@ ggplot(data = select_player_Batting)+
   aes(x = cAge, y=inv_logit_pred)+
   geom_point()+
   geom_smooth(color="red")+
+  scale_y_continuous(labels = label_percent())+
   labs(title = "Predicted Career Trajectory for #651")
 ```
 
@@ -621,6 +773,7 @@ ggplot(data = i582.Trajectory)+
   aes(x = cAge, y = p)+
   geom_point()+
   geom_smooth()+
+  scale_y_continuous(labels = label_percent())+
   labs(title = "Actual Trajectory for player #582")
 ```
 
@@ -630,5 +783,46 @@ ggplot(data = i582.Trajectory)+
   aes(x = cAge, y=inv_logit_pred)+
   geom_point()+
   geom_smooth(color="red")+
+  scale_y_continuous(labels = label_percent())+
   labs(title = "Predicted Career Trajectory for #582")
+```
+
+```{r}
+#| label: fig-p177Act
+ggplot(data = i177.Trajectory)+
+  aes(x = cAge, y = p)+
+  geom_point()+
+  geom_smooth()+
+  scale_y_continuous(labels = label_percent())+
+  labs(title = "Actual Trajectory for player #177")
+```
+
+```{r}
+#| label: fig-p177Pred
+ggplot(data = i177.Trajectory)+
+  aes(x = cAge, y=inv_logit_pred)+
+  geom_point()+
+  geom_smooth(color="red")+
+  scale_y_continuous(labels = label_percent())+
+  labs(title = "Predicted Career Trajectory for #177")
+```
+
+```{r}
+#| label: fig-p420Act
+ggplot(data = i420.Trajectory)+
+  aes(x = cAge, y = p)+
+  geom_point()+
+  geom_smooth()+
+  scale_y_continuous(labels = label_percent())+
+  labs(title = "Actual Trajectory for player #420")
+```
+
+```{r}
+#| label: fig-p420Pred
+ggplot(data = i420.Trajectory)+
+  aes(x = cAge, y=inv_logit_pred)+
+  geom_point()+
+  geom_smooth(color="red")+
+  scale_y_continuous(labels = label_percent())+
+  labs(title = "Predicted Career Trajectory for #420")
 ```
