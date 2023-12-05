@@ -345,6 +345,10 @@ select_players_Batting <- Batting %>%
 #As a warning to all who are going to be running this in the future: even calculating the parameters from the model (alpha, beta, eta, and xi) are computationally expensive. They take a good chunk of time to calculate which makes rendering the document take a couple minutes.
 ```
 
+## General
+
+This section should be dedicated to talking about general fit of the model. Explore using the normals plots that we've been using with the confidence intervals to see if the parameters are near their priors. And, also explore using the trace-plots. The linegraphs that go all over the place.
+
 ## Robin Yount
 
 ```{r}
