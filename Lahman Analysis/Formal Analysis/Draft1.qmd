@@ -305,7 +305,10 @@ saveRDS(fit.poly, "PolyFit.rds")
 
 ```{r}
 #Lets me load in the model that I made. Will only work on my desktop.
-fit.poly <- readRDS("C:/Users/Sam/Desktop/RDS/PolyFit.rds", )
+#fit.poly <- readRDS("C:/Users/Sam/Desktop/RDS/PolyFit.rds", )
+
+#Lets me load in the model for my Mac
+fit.poly <- readRDS("~/Desktop/RDS/PolyFit.rds")
 ```
 
 ```{r}
