@@ -1,0 +1,227 @@
+---
+title: "Bayesian Data Analysis"
+subtitle: "MATH 470 Summary"
+author: "Sam Turner"
+format: 
+  revealjs:
+    theme: white
+    embed-resources: true
+editor: visual
+---
+
+## Fellingham and Fisher (2017)
+
+::: {layout-nrow="2"}
+![](Figures/FF%20Front.png)
+
+Pros: Bayesian model
+
+-   Bayesian model
+:::
+
+## Fellingham and Fisher (2017) Cont.
+
+Cons:
+
+-   Sparingly uses multilevel modeling
+
+    -   Only use multilevel modeling on their orthogonal quartic polynomial
+
+-   Priors are uninformative and don't fit data
+
+    -   Expect average player's HR probability to be 0.0015
+
+    -   Priors effectively suggest that players could have a HR probability between 0 and 1
+
+-   Strange choices of parameters
+
+    -   Age, decade of birth, season of play, home ballpark
+
+## Model
+
+$$
+\begin{align}
+HR_{nip} &\sim Binomial(AB_{nip},\pi_{nip})\\
+\log(\frac{\pi_{nip}}{1-\pi_{nip}}) &= \alpha_{n}+\beta_n\cdot (Age_{ni}-30)+\eta_n\cdot (Age_{ni}-30)^2\\
+&+\delta_p+\xi_i
+\end{align}
+$$
+
+The amount of HR's hit by player $n$ in year $i$ played at park $p$ is binomially distributed, according to player $n$'s AB's and HR probability $\pi$ for year $i$ at park $p$.
+
+HR probability $\pi$ is measured on the logistic scale.
+
+## "Innate" HR Hitting Ability - $\alpha_n$
+
+$$
+\begin{align}
+\alpha_n&\sim Normal(\mu_0, \sigma_0), n\in\{1,...,657\}\\
+\\
+\mu_0&\sim Normal(-3.5,0.1)\\
+\sigma_0&\sim Exponential(1)
+\end{align}
+$$
+
+-   Intercept term which represents "innate" hitting ability of players skilled enough to play in MLB
+
+-   -3.5 on the logit scale is ≈0.029 or 2.9%
+
+-   -3.5±0.1 = \[-3.6, -3.4\] = \[0.0266, 0.0323\] = \[2.7%, 3.2%\]
+
+-   -3.5±2 = \[-5.5, -1.5\] = \[0.0041, 0.182\] = \[0.4%, 18.2%\]
+
+## HR Hitting by Age
+
+![](Figures/HRByAgeAll.png){fig-align="center"}
+
+## HR Distribution
+
+![](Figures/pDist.png){fig-align="center"}
+
+## HR Distribution Cont.
+
+![](Figures/pDistSmall.png){fig-align="center"}
+
+## Centered Age Effect - $\beta_n$
+
+$$
+\begin{align}
+\beta_n &\sim Normal(\mu_1,\sigma_1), n\in\{1,...,657\}\\
+\\
+\mu_1 &\sim Normal(0,0.1)\\
+\sigma_1 &\sim Exponential(10)
+\end{align}
+$$
+
+-   Multiplicative effect representing how deviation from centered age (Age - 30) affects HR hitting ability
+
+-   Age plays a factor in hitting HR's, but it is likely not very large so we have the priors set near 0 to reflect this
+
+## Centered Age Effect Squared - $\eta_n$
+
+$$
+\begin{align}
+\eta_n &\sim Normal(\mu_2, \sigma_2),n\in\{1,...,657\}\\
+\\
+\mu_2 &\sim Normal(0, 0.01)\\
+\sigma_2 &\sim Exponential(100)\\
+\end{align}
+$$
+
+-   Multiplicative effect representing how deviation from centered age squared \[(Age - 30)²\] affects HR hitting ability
+
+-   Used to capture the non-linearity of the data without risk of over-fitting
+
+## HR Hitting by Age
+
+![](Figures/HRByAge20to40.png){fig-align="center"}
+
+## Park Effect - $\delta_p$
+
+$$
+\begin{align}
+\delta_p &\sim Normal(\mu_5,\sigma_5),p\in\{1,...,88\}\\
+\\
+\mu_5 &\sim Normal(0,0.01)\\
+\sigma_5 &\sim Exponential(10)
+\end{align}
+$$
+
+-   Intercept term which captures the effect playing in different parks has on HR probabilities
+
+-   Parks differ by both dimensions and altitude which affects HR rates
+
+## Park Overlay
+
+![](Figures/AllPark.png){fig-align="center"}
+
+## Park Overlay Cont.
+
+![](Figures/LongShortPark.png){fig-align="center"}
+
+## Year Effect - $\xi_i$
+
+$$
+\begin{align}
+\xi_i &\sim Normal(\mu_6,\sigma_6),i\in\{1,...,47\}\\
+\\
+\mu_6 &\sim Normal(0,0.25)\\
+\sigma_6 &\sim Exponential(10)
+\end{align}
+$$
+
+-   Intercept term which captures the effect playing in different years has on HR probability
+
+-   Changes can occur because of rules, ownership goals, player goals, etc.
+
+-   This term captures those changes without asking why there are changes
+
+## HR's by Year in MLB
+
+![](Figures/HRByYear.png){fig-align="center"}
+
+## HR Proportion by Year in MLB
+
+![](Figures/pByYear.png){fig-align="center"}
+
+## Model (Again)
+
+$$
+\begin{align}
+HR_{nip} &\sim Binomial(AB_{nip},\pi_{nip})\\
+\log(\frac{\pi_{nip}}{1-\pi_{nip}}) &= \alpha_{n}+\beta_n\cdot (Age_{ni}-30)+\eta_n\cdot (Age_{ni}-30)^2\\
+&+\delta_p+\xi_i
+\end{align}
+$$
+
+-   There are $1.17\times10^{12}$ parameters for this model
+
+-   The model predicts that the average player's $\pi$ is about 0.03 (on the normal scale) which is what we observe in the data
+
+-   Uses Bayesian techniques to update estimates based on what the data says - allows for inference
+
+## Robin Yount - Actual $\pi$
+
+![](Figures/Actual651.png){fig-align="center"}
+
+## Robin Yount - Predicted $\pi$
+
+![](Figures/Pred651.png){fig-align="center"}
+
+## Pat Tabler - Actual $\pi$
+
+![](Figures/Actual582.png){fig-align="center"}
+
+## Pat Tabler - Predicted $\pi$
+
+![](Figures/Pred582.png){fig-align="center"}
+
+## Kendrys Morales - Actual $\pi$
+
+![](Figures/Actual420.png){fig-align="center"}
+
+## Kendrys Morales - Predicted $\pi$
+
+![](Figures/Pred420.png){fig-align="center"}
+
+## Goodness of Fit - Trace-plots
+
+![](Figures/alphaTrace.png){fig-align="center"}
+
+## Conclusions
+
+-   Will our model make the Hood math department excellent gamblers?
+
+    -   No. But it did a fine job at adapting predictions of players and being "right" on average
+
+-   Areas of future research
+
+    -   Player archetypes and physical characteristics
+
+    -   Considering more for a longer time interval (like Fellingham and Fisher (2017))
+
+    -   Better data (advanced metrics or play-by-plays)
+
+## Conclusions Cont.
+
+-   We believe we did better than Fellingham and Fisher (2017), but without access to their model and computational resources it is difficult to determine
