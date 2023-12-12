@@ -1,6 +1,6 @@
 ---
-title: "Bayesian Data Analysis"
-subtitle: "MATH 470 Summary"
+title: "Statistical Grand Slams"
+subtitle: "A Bayesian Approach to Modeling Home Run Production in Major League Baseball"
 author: "Sam Turner"
 format: 
   revealjs:
@@ -8,6 +8,24 @@ format:
     embed-resources: true
 editor: visual
 ---
+
+## Introduction
+
+-   In this research project, Dr. Parson and I sought to predict the home run (HR) production of Major League Baseball hitters.
+
+-   If you work for a MLB team, predicting HR's is important because it is the pinnacle outcome of an at-bat (AB)
+
+-   And even if you don't work for a MLB team, you could make a lot of money in Vegas if you can accurately predict HR's!
+
+## Introduction Cont.
+
+-   A problem with predicting player HR's is that there is often limited data available
+
+    -   For example, players who have played for more than 6 seasons are considered very "veteran" but only have 6 player-season data points
+
+-   Generalized linear models (GLM's) from classical statistics have a hard fitting accurate models given limited data points - such as the 6 data point scenario mentioned above
+
+-   This is where a Bayesian model shines - Bayesian models can "learn" from the data improving the effective observations it has for fitting
 
 ## Fellingham and Fisher (2017)
 
@@ -29,7 +47,7 @@ Cons:
 
 -   Priors are uninformative and don't fit data
 
-    -   Expect average player's HR probability to be 0.0015
+    -   Expect average player's HR probability to be 0.00015
 
     -   Priors effectively suggest that players could have a HR probability between 0 and 1
 
@@ -42,16 +60,81 @@ Cons:
 $$
 \begin{align}
 HR_{nip} &\sim Binomial(AB_{nip},\pi_{nip})\\
-\log(\frac{\pi_{nip}}{1-\pi_{nip}}) &= \alpha_{n}+\beta_n\cdot (Age_{ni}-30)+\eta_n\cdot (Age_{ni}-30)^2\\
+\frac{\pi_{nip}}{1-\pi_{nip}} &= \alpha_{n}+\beta_n\cdot (Age_{ni}-30)+\eta_n\cdot (Age_{ni}-30)^2\\
 &+\delta_p+\xi_i
 \end{align}
 $$
 
 The amount of HR's hit by player $n$ in year $i$ played at park $p$ is binomially distributed, according to player $n$'s AB's and HR probability $\pi$ for year $i$ at park $p$.
 
-HR probability $\pi$ is measured on the logistic scale.
+The amount of AB's in a year is given for our prediction of HR's, but we say that the probability that the AB results in a HR, $\pi$ varies according to a number of factors.
+
+## Model Cont.
+
+We can both simulate and predict the amount of HR's of a player. For example, let's examine a player that has 100 AB's and a probability $\pi$ of 0.03.
+
+That is, $HR \sim Normal(100,0.03)$,
+
+Simulation:
+
+```{r}
+#| echo: true
+set.seed(1)
+rbinom(5, 100, 0.03)
+```
+
+Prediction:
+
+$E(HR)=AB\cdot \pi=100\cdot0.03=3$
+
+## Data
+
+Our data for the model comes from the Lahman data set. Lahman covers a variety of information on each player, including but not limited to, batting, fielding, team, and player statistics.
+
+In order to be considered in our analysis a player must have accumulated at least 6 seasons of play, with at least 50 AB's in each, and have played from 1973-2019.
 
 ## "Innate" HR Hitting Ability - $\alpha_n$
+
+$$
+\begin{align}
+\alpha_n&\sim Normal(\mu_0, \sigma_0), n\in\{1,...,657\}\\
+\\
+\mu_0&\sim Normal(-3.5,0.1)\\
+\sigma_0&\sim Exponential(1)
+\end{align}
+$$
+
+-   Intercept term which represents "innate" hitting ability of players skilled enough to play in MLB
+
+-   -3.5 on the logit scale is ≈0.029 or 2.9%
+
+-   -3.5±0.1 = \[-3.6, -3.4\] = \[0.0266, 0.0323\] = \[2.7%, 3.2%\]
+
+-   -3.5±2 = \[-5.5, -1.5\] = \[0.0041, 0.182\] = \[0.4%, 18.2%\]
+
+## Multilevel Trade-Off - No Pooling
+
+No pooling would mean that each player gets their own posterior $\alpha$ distribution. That is,
+
+$$
+\alpha_n\sim Normal(-3.5,1).
+$$
+
+This prior would be multiplied by the data to generate the posterior for each player. However, this disadvantages players with less seasons because there is not as much data to go off of. And we know that we could look a player, $m$, who performs similar to $n$ WLOG and generate more accurate predictions.
+
+## Multilevel Trade-Off - Total Pooling
+
+In a total pooling scenario $\alpha$ would just be a dummy variable in the model of the model,
+
+$$
+HR=\tau+\Gamma\cdot AB+\alpha_n+\beta_n+\eta_n+\delta_p+\xi_i+\epsilon
+$$
+
+But then we run into the problem of multicolinearity. That is, how do we tease out the relationship between $\alpha_n, \delta_p$, and $\xi_i$ since they all are intercept terms? This model also has a hard time allowing for players to stray from the mean for any parameter.
+
+In essence, we lose information from both no and total pooling.
+
+## "Innate" HR Hitting Ability - $\alpha_n$ (Again)
 
 $$
 \begin{align}
@@ -164,17 +247,23 @@ $$
 
 ![](Figures/pByYear.png){fig-align="center"}
 
-## Model (Again)
+## Model (Again I)
 
 $$
 \begin{align}
 HR_{nip} &\sim Binomial(AB_{nip},\pi_{nip})\\
-\log(\frac{\pi_{nip}}{1-\pi_{nip}}) &= \alpha_{n}+\beta_n\cdot (Age_{ni}-30)+\eta_n\cdot (Age_{ni}-30)^2\\
+\frac{\pi_{nip}}{1-\pi_{nip}} &= \alpha_{n}+\beta_n\cdot (Age_{ni}-30)+\eta_n\cdot (Age_{ni}-30)^2\\
 &+\delta_p+\xi_i
 \end{align}
 $$
 
--   There are $1.17\times10^{12}$ parameters for this model
+-   There are 2,116 parameters for this model
+
+    -   (3×657)+88+47+10
+
+-   This model is classically non-identifiable because of 3 intercept terms!
+
+## Model (Again II)
 
 -   The model predicts that the average player's $\pi$ is about 0.03 (on the normal scale) which is what we observe in the data
 
