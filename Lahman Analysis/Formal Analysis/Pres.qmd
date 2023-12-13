@@ -73,7 +73,7 @@ The amount of AB's in a year is given for our prediction of HR's, but we say tha
 
 We can both simulate and predict the amount of HR's of a player. For example, let's examine a player that has 100 AB's and a probability $\pi$ of 0.03.
 
-That is, $HR \sim Normal(100,0.03)$,
+That is, $HR \sim Binomial(100,0.03)$,
 
 Simulation:
 
@@ -114,27 +114,27 @@ $$
 
 ## Multilevel Trade-Off - No Pooling
 
-No pooling would mean that each player gets their own posterior $\alpha$ distribution. That is,
+No pooling would mean that each player, $n$, gets their own $\alpha$ estimate. That is,
 
 $$
-\alpha_n\sim Normal(-3.5,1).
+\frac{\pi_n}{1-\pi_n}= \alpha_{PLAYER[n]}+...
 $$
 
-This prior would be multiplied by the data to generate the posterior for each player. However, this disadvantages players with less seasons because there is not as much data to go off of. And we know that we could look a player, $m$, who performs similar to $n$ WLOG and generate more accurate predictions.
+This intercept would just match the data we had on each player. It probably over-fits from relying on player data too much, which is sparse. You can think of this model suffers from amnesia because it assumes there is nothing in common moving from player to player.
 
 ## Multilevel Trade-Off - Total Pooling
 
-In a total pooling scenario $\alpha$ would just be a dummy variable in the model of the model,
+In a total pooling scenario players share the same intercept $\alpha$, which is just the overall mean HR probability. There are lots of data, so we can be confidnet of the value that $\alpha$ would be, however it wouldn't be effective to apply on a case-per-case basis. This is because few players are likely to $\alpha$'s which exactly match the mean of the data.
 
 $$
-HR=\tau+\Gamma\cdot AB+\alpha_n+\beta_n+\eta_n+\delta_p+\xi_i+\epsilon
+\frac{\pi_n}{1-\pi_n}=\alpha+...=\overline{HR}+...
 $$
 
-But then we run into the problem of multicolinearity. That is, how do we tease out the relationship between $\alpha_n, \delta_p$, and $\xi_i$ since they all are intercept terms? This model also has a hard time allowing for players to stray from the mean for any parameter.
+You can think of this model suffering from over-sharing since it cannot distinguish the $\alpha$ from player to player.
 
 In essence, we lose information from both no and total pooling.
 
-## "Innate" HR Hitting Ability - $\alpha_n$ (Again)
+## "Innate" HR Hitting Ability - $\alpha_n$ (Again) {.scrollable}
 
 $$
 \begin{align}
