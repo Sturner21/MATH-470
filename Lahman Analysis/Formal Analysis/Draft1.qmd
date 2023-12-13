@@ -9,6 +9,7 @@ format:
     toc-location: left
     toc-expand: true
     embed-resources: true
+    number-sections: true
     
 execute: 
   echo: false
@@ -168,7 +169,8 @@ $$
 \begin{align}
 HR_{nip}|\pi_{nip}&\sim Binomial(AB_{nip},\pi_{nip})\\
 \\
-\log(\frac{\pi_{nip}}{1-\pi_{nip}})&=[\beta_{n1}\cdot Age_{ni}]+[\beta_{n2}\cdot(Age_{ni})^2]+[\beta_{n3}\cdot(Age_{ni})^3]+[\beta_{n4}\cdot(Age_{ni})^4]+\alpha_n+\xi_i
+\log(\frac{\pi_{nip}}{1-\pi_{nip}})&=[\beta_{n1}\cdot Age_{ni}]+[\beta_{n2}\cdot(Age_{ni})^2]+[\beta_{n3}\cdot(Age_{ni})^3]+[\beta_{n4}\cdot(Age_{ni})^4]\\
+&+\alpha_n+\xi_i
 +\delta_p
 \end{align}
 $$ {#eq-FFmodel}
@@ -259,11 +261,17 @@ Similarly $\eta_n$ is the effect that player $n$'s squared age has on his probab
 
 Another parameter of our model is $\delta_p$, which describes the effect playing in ballpark $p$ in year $i$ has player $n$'s HR probability, $\pi_{nip}$. There are 88 different ballparks we considered, and we generated an estimate for each of them. This was discussed in @sec-BaseBack, where we highlighted that players in certain ballparks are more likely to hit HR's than in others because of the different dimensions of the outfield fences. Furthermore, we know that these parks will effect players differently because teams play at different ballparks with varying frequency. For example, players will play 81 of their games at their home-stadium and 81 at various other ballparks known as "on the road." Thus, the home-stadium that player $n$ plays at is an important factor for their HR probability, $\pi$, because player $n$ plays many more games at his home-stadium compared to any other ballpark. In our model, we have estimated $\delta_p$ as an intercept term which captures the effect that playing at stadium $p$ has on HR probability, $\pi$. Stadiums like Great American Ballpark (index=33) tend to have a better HR effect than stadiums such as Cleveland Stadium (index=19). By better, we mean that it the probability of hitting a HR is higher at Great American Ballpark compared to Cleaveland Stadium because our model interprets hitting a HR as a success. Interpreting $\delta_p$ is much easier than the previous two parameters. It simply states, on the logit scale, how the park effects the underlying probability of hitting a HR, $\pi$. In addition, $\delta_p$ takes advantage of multilevel modeling since we have hyper-priors, $\mu_5$ and $\sigma_5$. We have purposely set the hyper-prior of $\mu_5\sim Normal(0,0.01)$ with mean 0 because we assume that parks in the aggregate will not have an effect on a player's ability to hit HR's. That is, on average, for every Cleveland Stadium there exists a Great American Ballpark which acts as a counterweight and makes the aggregate effect 0. There is no formal justification for this, it is just an assumption that we make based on our preliminary exploration and our understanding that ownership (who controls the dimensions of the stadium) are not particularly biased to any ballpark size which means that we should see good variation between parks. Further, we assume that a fair standard deviation for $\mu_5$ is 0.01 because on the logistic scale, this means that we could see about a two percent change in the probabilities between any given stadiums. At most we would see a 4% difference. We chose a standard deviation for $\delta_p$ to be $\sigma_5\sim Exponential(10)$ for similar reasons to all of the other $\sigma_i$'s. The exponential distribution cannot be negative, which we need for standard deviations. Further, we know that the effect of each park will probably not be huge because, although there is deviation, there is not extreme deviation between parks that makes some "unfair." Thus, with our parameter of 10 for the exponential distribution we are being fairly confident with our model about our estimates of the priors, in that we do not allow much deviation from our mean of 0 unless the data strongly suggests otherwise.
 
-Our final parameter, $\xi_i$ represents the change in the underlying probability of player hitting a HR in the year $i$. This stems mostly from the observation in @fig-HRByYear which shows a steep increase in the amount of HR's hit per year across any subset of years considered. Further, we can tell from @fig-pByYear that these additional HR's are not just the product of exapnsion teams creating more opportunities for players to hit more HR's. @fig-pByYear shows that the proportion of AB's which are HR's have risen steadily over the period considered which suggests that players' probabilities have been changing. This means that there is an underlying change in the $\pi$ depending on the year considered. The reason for this change is irrelevant. It could be because batters are becoming better or pitchers are getting worse, or it could be some other unrelated reason. Regardless, we can see that there is an increase and we need to account for this in our estimates for $\pi$ of player $n$. Thus, we include $\xi_i$ to represent the effect that playing in a certain year will have on the player's ability to hit a HR. We set the hyper-prior of $\xi_i$ as $\mu_6\sim Normal(0, 0.25)$ because we can see that the HR proportion change year over year in @fig-pByYear by only fractions of a percent. Thus, when we set our prior with mean 0 and standard deviation of 0.25, we are saying that we expect most year of year variation to be from \[-4, -3\] on the logit scale. On the normal this is \[0.018, 0.047\] which means that we would expect at most a change of 3% year over year. This is much larger than we would actually anticipate in a change but it allows the model to learn from the data to learn from the data more since we are unsure of exactly what the change beyond knowing that there is a change year over year. Furthermore, we set the hyper-prior $\sigma_6\sim Exponential(10)$ for the same reasons mentioned during the other $\sigma_i$'s. The exponential distriubtion ensures that we never have a negative estimate for our standard deviation of $\xi_i$ and having a parameter value of 10 for $\sigma_6$ allows the data to be fairly concentrated near 0 which is what we would expect for a year over year effect.
+Our final parameter, $\xi_i$ represents the change in the underlying probability of player hitting a HR in the year $i$. This stems mostly from the observation in @fig-HRByYear which shows a steep increase in the amount of HR's hit per year across any subset of years considered. Further, we can tell from @fig-pByYear that these additional HR's are not just the product of exapnsion teams creating more opportunities for players to hit more HR's. @fig-pByYear shows that the proportion of AB's which are HR's have risen steadily over the period considered which suggests that players' probabilities have been changing. This means that there is an underlying change in the $\pi$ depending on the year considered. The reason for this change is irrelevant. It could be because batters are becoming better or pitchers are getting worse, or it could be some other unrelated reason. Regardless, we can see that there is an increase and we need to account for this in our estimates for $\pi$ of player $n$. Thus, we include $\xi_i$ to represent the effect that playing in a certain year will have on the player's ability to hit a HR. We set the hyper-prior of $\xi_i$ as $\mu_6\sim Normal(0, 0.25)$ because we can see that the HR proportion change year over year in @fig-pByYear by only fractions of a percent. Thus, when we set our prior with mean 0 and standard deviation of 0.25, we are saying that we expect most year of year variation to be from \[-4, -3\] on the logit scale. On the normal this is \[0.018, 0.047\] which means that we would expect at most a change of 3% year over year. This is much larger than we would actually anticipate in a change but it allows the model to learn from the data to learn from the data more since we are unsure of exactly what the change beyond knowing that there is a change year over year. Furthermore, we set the hyper-prior $\sigma_6\sim Exponential(10)$ for the same reasons mentioned during the other $\sigma_i$'s. The exponential distribution ensures that we never have a negative estimate for our standard deviation of $\xi_i$ and having a parameter value of 10 for $\sigma_6$ allows the data to be fairly concentrated near 0 which is what we would expect for a year over year effect.
 
-Compared to most GLM's, this model [@eq-model] we have created is massive. It has 2,116 parameters. It has 657 different $\alpha, \beta,$ and $\eta$ estimated for each player. It has 88 $\delta$'s for each park and
+Compared to most GLM's, this model ([@eq-model]) we have created is massive. It has 2,116 parameters. It has 657 different $\alpha, \beta,$ and $\eta$'s estimated for each player. It has 88 $\delta$'s for each park and 47 $\xi$'s for each year. Finally, it has 10 different $\mu$'s and $\sigma$'s for the different hyper-priors. All together, totaling 2,116 parameters. This gargantuan size is what allows such powerful inference for our model. Even though the data on each player individually is sparse, since there is so much data available for the model to take in beyond that player and the model uses many simulations to create estimates, this allows our model to make strong inferences to be made concerning future performance.
 
 # Results {#sec-Results}
+
+The goal of our model, as described in @eq-model, @eq-priors, and @eq-hyperpriors, was to be able to adaptively predict player $n$'s HR's. That is, we wished to create a model that would predict player $n$'s HR's and would adapt these predictions to be unique to player, $n$, the park played at, $p$, and the year played, $i$. To check the fit of their model, Fellingham and Fisher (2017) selected popular players (such as Hank Aaron and Barry Bonds) as a representative sample of the player population. However, the problem with this appraoch is that Fellingham and Fisher (2017) have selected players who are phenomenal hitters and generally outliers in the data. For example, Barry Bonds currently holds the single season and career HR records. Which means that he has the most HR's hit in one season and the most hit over the course of a career compared to all people who have every played in MLB. The career HR record he holds was previously held by Hank Aaron. Obviously, this sample of players is not representative of the population of players considered by Fellingham and Fisher (2017). So, while it may make the paper more enjoyable to read, it does not provide use with a rigourus understanding of the general fit of this model. We believe that a random sample should have been used to examine the fit of their model since it would give a better sense of overall model fit. Which, is exactly what we did in this paper. From the 657 players considered, we used R to select four random players to see how our model both fits and adapts to the different careers of players. These players are: Robin Yount ([@sec-yount]), Pat Tabler ([@sec-tabler]), Junior Felix ([@sec-felix]), and Kendrys Morales([@sec-morales]).
+
+In exploring the efficacy of our model, we chose to examine $\pi_{nip}$ for the players mentioned above instead of $HR_{nip}$. We did this because moving between the expected value of HR's ($E(HR_{nip})$) and the HR probability ($\pi_{nip}$) is rather elementary due to $E(HR_{nip})=AB_{nip}\times\pi_{nip}$, since $HR_{nip}$ is a binomial random variable. We assumed when making our model that $AB_{nip}$ were given which means moving between $E(HR_{nip})$ and $\pi_{nip}$ is simply a matter of multiplication or division depending on which term you would like to reference. Thus, because of the similarity between what $E(HR_{nip})$ and $\pi_{nip}$ are describing we decided to only focus on $\pi_{nip}$ without loss of generality.
+
+Furthermore, we chose to examine $\pi_{nip}$ relative to centered age for all figures. This is because centered age corresponds directly to the parameters $\beta, \eta,$ and $\xi$ in our model ([@eq-model]). It should be obvious why centered age corresponds to $\beta$ and $\eta$. However, the reason we know that centered age corresponds to $\xi$ directly is because players are only an age for one season. Thus, if we are given a year and player $n$'s corresponding age we can deduce the year for all ages of the player. This means that the year-over-year effect, which $\xi$ captures, is directly present in the figures. The parameters $\alpha$ and $\delta$ work more in the background of the predictions presented in the figures. We leave the discussion of each to when they appear in the figures of certain players.
 
 In explore results, discuss both the trajectories of about 4-5 players and show how they change (probably want to sample about 10 just to be safe). But then, just for fun, look at which player has the highest $\alpha$ level since that would be my models prediction of best HR hitter independent of everything else. It will probably be Barry Bonds.
 
@@ -351,9 +359,9 @@ select_players_Batting <- Batting %>%
 
 ## General
 
-This section should be dedicated to talking about general fit of the model. Explore using the normals plots that we've been using with the confidence intervals to see if the parameters are near their priors. And, also explore using the trace-plots. The linegraphs that go all over the place.
+This section should be dedicated to talking about general fit of the model. Explore using the normal plots that we've been using with the confidence intervals to see if the parameters are near their priors. And, also explore using the trace-plots. The linegraphs that go all over the place.
 
-## Robin Yount
+## Robin Yount {#sec-yount}
 
 ```{r}
 set.seed(1)
@@ -410,9 +418,13 @@ select_player_Batting <- select_player_Batting %>%
   mutate(inv_logit_pred = inv.logit(pred), .after=pred)
 ```
 
-See @fig-p651Act and @fig-p651Pred.
+Consider player $n=651$. That is, consider the player Robin Yount. In @fig-p651Act we can see how Yount's actual HR probability has changed over the years that he played. The x-axis of @fig-p651Act describes Yount's deviation from the centered age, where the centered age value of 0 represents a player being 30 years old. And the y-axis represents the actual HR probability of Yount. Thus, the point (0, 3.25) tells us that Yount's actual HR probability was 3.25% when he was 30 years old. Similarly, the points (-10, 1.5) and (6, 2) represent Yount's actual HR probability being 1.5% when he was 20 years old and 2% when he was 36 years old, respectively. Included in @fig-p651Act is a blue trend line that snakes through the data. This line does not represent anything meaningful, it was included simply to make seeing and interpreting the trend present in the scatter-plot easier. To that end, we can see in @fig-p651Act that during the first 10 years of his career, Yount saw a steady increase in his actual HR probability until he was 28 years old. From when he was 29 years old until he was about 35 years old, there some fluctuation in his HR probability by overall it stayed fairly consistent at around 2.5-3%. Finally, in the last three years of his career we can see Yount's HR probability decline to about 1.75% when he was 38 years old. Overall, Yount appears to have a typical career compared to what the told our model to expect. There was a steady increase in probability until he was about 30, followed by a decline afterwards as he got older. The shape of the trend-line through the scatter-plot follows a vaguely parabolic shape which is what we would expect to see. Thus, Yount will be a good benchmark for the model to see how it predicts "typical" players.
 
-## Pat Tabler
+In @fig-p651Pred we can examine how our model predicted Yount's HR probability, $\pi$, to change over his career. The x-axis is the same as it is in @fig-p651Act, where it describes Yount's deviation from the cetnered age (which is 30). The y-axis describes Yount's predicted HR probability $\pi$. An important note is that the y-axis is not measured on the logistic scale. We calculated it on the logistic scale but then converted it back to the normal scale, and use the normal scale in the figure, to prevent any confusion. Interpreting the points in @fig-p651Pred is very similar to the interpretation of points for @fig-p651Act. Each point in @fig-p651Pred represents the model's prediction of Yount's $\pi$ for a centered age value. For example, the point (0, 3.25) represents the model predicting that Yount's $\pi=3.25$ when he is 30 years old, which was very close to the actual value. Similarly, the points (-10, 1) and (6, 2) represent our model's prediction that Yount's $\pi=1$ when he is 20 years old and $\pi=2$ when he is 36 years old, respectively, which is also very close to what we saw in @fig-p651Act. Included in @fig-p651Pred is a red trend line for the same reasons mentioned in discussing @fig-p651Act. The red trend line represents the overall trend of the data in the scatter-plot. It is not nearly as necessary here, because the data is so clearly clustered in a parabolic pattern, but it is helpful in future plots. We can see in @fig-p651Pred that the predictions from our model follow closely to what we told it to expect. There is an increase in HR probability, $\pi$, for Yount from when he is 18 to when he is 32. This is quite close to what we see in the figure representing his actual HR probability. Then we see a sharp decline in predicted HR probability for Yount as he ages past 32 until he retires at the age of 38.
+
+Overall, it seems that our model fit Yount's trajectory well. In any given year we could see that the predicted HR probability, $\pi$, was closer to the mean value of 3% than Yount's actual HR probability, but this is a by-product of multilevel modeling and not a defect with the model. Our model is told to assume average and update expectations given past performance. Which is what it did, on any given year it assumes Yount is more average than he really is, for both good and bad years. In addition, since we can see that Yount's actual trajectory and his projected trajectory were quite similar, it seems fair to say that our model did a good job at predicted Yount's HR probability. Of course, this is not unexpected; Yount followed a trajectory that our model should do very well with. There were not many unique featuers to his career where he did astoundingly well or poorly. Thus, although our model did well with Yount, we expected it to do well because it was not a challenging player to model. It will be interesting to consider other players who do not have as normal of a career.
+
+## Pat Tabler {#sec-tabler}
 
 ```{r}
 # Pat Tabler (582) Estimates cell
@@ -485,7 +497,7 @@ i582.Trajectory <- Batting %>%
 
 See @fig-p582Act and @fig-p582Pred.
 
-## Junior Felix
+## Junior Felix {#sec-felix}
 
 ```{r}
 # Junior Felix (177) Estimates cell
@@ -558,7 +570,9 @@ i177.Trajectory <- Batting %>%
 
 See @fig-p177Act and @fig-p177Pred.
 
-## Kendrys Morales
+Probably don't need to include this examination. Paper will probably be long enough and he's not that interesting.
+
+## Kendrys Morales {#sec-morales}
 
 ```{r}
 # Kendrys Morales (420) Estimates cell
@@ -630,6 +644,8 @@ i420.Trajectory <- Batting %>%
 ```
 
 See @fig-p420Act and @fig-p420Pred.
+
+## Goodness of Fit - $\alpha$ 
 
 # Conclusions and Directions for Future Research
 
@@ -732,6 +748,7 @@ ggplot(data = HR.Prop.Age %>% filter(Age >=20 & Age <= 40))+
 
 ```{r}
 #| label: fig-pDist
+#| fig-cap: "Distribution of Players' HR Proportions"
 ggplot(data = Batting)+
   aes(x = p)+
   geom_histogram(bins = 75)+
@@ -746,6 +763,7 @@ ggplot(data = Batting)+
 
 ```{r}
 #| label: fig-pDistSmall
+#| fig-cap: "Constricted View of Distribution of Players' HR Proportions"
 #I want this to have a little more breaks in the x-axis to highlight where the median is
 ggplot(data = Batting)+
   aes(x = p)+
@@ -761,6 +779,7 @@ ggplot(data = Batting)+
 
 ```{r}
 #| label: fig-p651Act
+#| fig-cap: "Actual Trajectory for player #651 - Robin Yount"
 ggplot(data = select_player_Batting)+
   aes(x = cAge, y = p)+
   geom_point()+
@@ -774,6 +793,7 @@ ggplot(data = select_player_Batting)+
 
 ```{r}
 #| label: fig-p651Pred
+#| fig-cap: "Predicted Career Trajectory for #651 - Robin Yount"
 ggplot(data = select_player_Batting)+
   aes(x = cAge, y=inv_logit_pred)+
   geom_point()+
@@ -787,6 +807,7 @@ ggplot(data = select_player_Batting)+
 
 ```{r}
 #| label: fig-p582Act
+#| fig-cap: "Actual Trajectory for player #582 - Pat Tabler"
 ggplot(data = i582.Trajectory)+
   aes(x = cAge, y = p)+
   geom_point()+
@@ -800,6 +821,7 @@ ggplot(data = i582.Trajectory)+
 
 ```{r}
 #| label: fig-p582Pred
+#| fig-cap: "Predicted Career Trajectory for #582 - Pat Tabler"
 ggplot(data = i582.Trajectory)+
   aes(x = cAge, y=inv_logit_pred)+
   geom_point()+
@@ -813,6 +835,7 @@ ggplot(data = i582.Trajectory)+
 
 ```{r}
 #| label: fig-p177Act
+#| fig-cap: "Actual Trajectory for player #177 - Junior Felix"
 ggplot(data = i177.Trajectory)+
   aes(x = cAge, y = p)+
   geom_point()+
@@ -826,6 +849,7 @@ ggplot(data = i177.Trajectory)+
 
 ```{r}
 #| label: fig-p177Pred
+#| fig-cap: "Predicted Career Trajectory for #177 - Junior Felix"
 ggplot(data = i177.Trajectory)+
   aes(x = cAge, y=inv_logit_pred)+
   geom_point()+
@@ -839,6 +863,7 @@ ggplot(data = i177.Trajectory)+
 
 ```{r}
 #| label: fig-p420Act
+#| fig-cap: "Actual Trajectory for player #420 - Kendrys Morales"
 ggplot(data = i420.Trajectory)+
   aes(x = cAge, y = p)+
   geom_point()+
@@ -852,6 +877,7 @@ ggplot(data = i420.Trajectory)+
 
 ```{r}
 #| label: fig-p420Pred
+#| fig-cap: "Predicted Career Trajectory for #420 - Kendrys Morales"
 ggplot(data = i420.Trajectory)+
   aes(x = cAge, y=inv_logit_pred)+
   geom_point()+
@@ -865,6 +891,7 @@ ggplot(data = i420.Trajectory)+
 
 ```{r}
 #| label: fig-alphaTrace
+#| fig-cap: "Alpha Traceplots"
 #651, 582, 177, 420
 traceplot(fit.poly, pars = c("alpha[651]", "alpha[582]", "alpha[177]", "alpha[420]"))
 ```
