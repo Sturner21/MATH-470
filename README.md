@@ -7,6 +7,12 @@ In this class Dr. Parson and I explored Bayesian multilevel modeling techniques 
 ## Packages
 The main textbook for this course was [*Statistical Rethinking* by Richard McElreath](https://xcelab.net/rm/statistical-rethinking/). The examples he provides are in *R* and utilize his package [rethinking](https://github.com/rmcelreath/rethinking). A guide for installation is available [here](https://www.rdocumentation.org/packages/rethinking/versions/2.13), because it is only available on his GitHub repository.
 
+To interface with Stan we used the "[rStan](https://mc-stan.org/users/interfaces/rstan)" package. This allowed us to feed our cleaned data from R into our models written in Stan. However, to retrieve the data from these models and be able to visualize them we used the "[tidybayes](http://mjskay.github.io/tidybayes/)" package.
+
+To retrieve the Lahman data we used the "[Lahman](https://cran.r-project.org/web/packages/Lahman/Lahman.pdf)" package.
+
+To manipulate the data and create the figures we used mainly the "[tidyverse](https://www.tidyverse.org)" package. In addition, to create a make the figures more professional, we used the "[scales](https://scales.r-lib.org)" package.
+
 ## Directory
 Below is an outline of the folders and project documents in them
 
